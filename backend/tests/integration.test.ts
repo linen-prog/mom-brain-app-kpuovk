@@ -6,36 +6,93 @@ describe("API Integration Tests", () => {
   // let authToken: string;
   // let resourceId: string;
 
-  // TODO: Add integration tests here.
-  // Tests run sequentially within describe, so you can chain state between them.
-  //
-  // Example without auth:
-  //
-  // test("Create resource", async () => {
-  //   const res = await api("/api/resources", {
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify({ name: "Test" }),
-  //   });
-  //   await expectStatus(res, 201);
-  //   const data = await res.json();
-  //   resourceId = data.id;
-  // });
-  //
-  // Example with auth (cleanup is automatic):
-  //
-  // test("Sign up test user", async () => {
-  //   const { token, user } = await signUpTestUser();
-  //   authToken = token;
-  //   expect(authToken).toBeDefined();
-  // });
-  //
-  // test("Create authenticated resource", async () => {
-  //   const res = await authenticatedApi("/api/resources", authToken, {
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify({ name: "Test" }),
-  //   });
-  //   await expectStatus(res, 201);
-  // });
+  describe("POST /api/organize", () => {
+    test("Organize brain dump with valid text", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Buy milk, schedule dentist appointment, fix the kitchen sink, plan weekly menu, call mom",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+
+      // Verify response structure includes all required categories
+      expect(data).toHaveProperty("doToday");
+      expect(data).toHaveProperty("thisWeek");
+      expect(data).toHaveProperty("kids");
+      expect(data).toHaveProperty("home");
+      expect(data).toHaveProperty("errands");
+      expect(data).toHaveProperty("meals");
+      expect(data).toHaveProperty("messages");
+      expect(data).toHaveProperty("holdingForLater");
+      expect(data).toHaveProperty("momCheckIn");
+
+      // Verify categories are arrays (except momCheckIn which is a string)
+      expect(Array.isArray(data.doToday)).toBe(true);
+      expect(Array.isArray(data.thisWeek)).toBe(true);
+      expect(Array.isArray(data.kids)).toBe(true);
+      expect(Array.isArray(data.home)).toBe(true);
+      expect(Array.isArray(data.errands)).toBe(true);
+      expect(Array.isArray(data.meals)).toBe(true);
+      expect(Array.isArray(data.messages)).toBe(true);
+      expect(Array.isArray(data.holdingForLater)).toBe(true);
+      expect(typeof data.momCheckIn).toBe("string");
+    });
+
+    test("Organize brain dump with longer text", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Finish project report today, review budget this week, help kids with homework, repair fence, go grocery shopping, prepare dinner, respond to emails, save article on productivity",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data.doToday).toBeDefined();
+      expect(data.thisWeek).toBeDefined();
+    });
+
+    test("Reject request with missing text field", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with empty text", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "" }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with null text", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: null }),
+      });
+      await expectStatus(res, 400);
+    });
+
+    test("Reject request with whitespace-only text", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "   \n\t  " }),
+      });
+      await expectStatus(res, 400);
+    });
+  });
 });
