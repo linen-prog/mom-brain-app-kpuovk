@@ -12,11 +12,31 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Colors, CategoryColors } from '@/constants/Colors';
-import { organizeText } from '@/utils/api';
+import { organizeText, OrganizeResponse } from '@/utils/api';
 import { getLatestDump, saveLatestDump, OrganizedDump } from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
 import { PrimaryButton } from '@/components/PrimaryButton';
+
+const FALLBACK_CHECK_IN = "I caught it all. Pick one small thing — that's enough.";
+
+function normalizeResponse(r: any): OrganizeResponse {
+  const arr = (v: any) => (Array.isArray(v) ? v.filter((x: any) => typeof x === 'string' && x.trim().length > 0) : []);
+  return {
+    doToday: arr(r?.doToday),
+    thisWeek: arr(r?.thisWeek),
+    kids: arr(r?.kids),
+    home: arr(r?.home),
+    errands: arr(r?.errands),
+    meals: arr(r?.meals),
+    messages: arr(r?.messages),
+    holdingForLater: arr(r?.holdingForLater),
+    momCheckIn:
+      typeof r?.momCheckIn === 'string' && r.momCheckIn.trim().length > 0
+        ? r.momCheckIn.trim()
+        : FALLBACK_CHECK_IN,
+  };
+}
 
 function getRelativeTime(isoString: string): string {
   const now = Date.now();
@@ -31,6 +51,19 @@ function getRelativeTime(isoString: string): string {
   return `${diffDays}d ago`;
 }
 
+function countAllItems(dump: OrganizedDump): number {
+  return (
+    dump.doToday.length +
+    dump.thisWeek.length +
+    dump.kids.length +
+    dump.home.length +
+    dump.errands.length +
+    dump.meals.length +
+    dump.messages.length +
+    dump.holdingForLater.length
+  );
+}
+
 export default function DumpScreen() {
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
@@ -40,6 +73,7 @@ export default function DumpScreen() {
   const [lastOrganized, setLastOrganized] = useState<string | null>(null);
 
   const resultsOpacity = useRef(new Animated.Value(0)).current;
+  const helperOpacity = useRef(new Animated.Value(1)).current;
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -52,6 +86,17 @@ export default function DumpScreen() {
     });
   }, []);
 
+  const hasText = text.length > 0;
+
+  // Fade out helper when user starts typing
+  useEffect(() => {
+    Animated.timing(helperOpacity, {
+      toValue: hasText ? 0 : 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [hasText, helperOpacity]);
+
   const handleOrganize = useCallback(async () => {
     if (!text.trim()) return;
     console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length);
@@ -61,17 +106,46 @@ export default function DumpScreen() {
     resultsOpacity.setValue(0);
 
     try {
-      const response = await organizeText(text.trim());
+      const raw = await organizeText(text.trim());
+      const normalized = normalizeResponse(raw);
+
+      // Check if AI returned nothing useful
+      const allEmpty =
+        normalized.doToday.length === 0 &&
+        normalized.thisWeek.length === 0 &&
+        normalized.kids.length === 0 &&
+        normalized.home.length === 0 &&
+        normalized.errands.length === 0 &&
+        normalized.meals.length === 0 &&
+        normalized.messages.length === 0 &&
+        normalized.holdingForLater.length === 0 &&
+        normalized.momCheckIn === FALLBACK_CHECK_IN;
+
+      if (allEmpty) {
+        console.log('[Dump] normalize: AI returned nothing useful, skipping save');
+        setError("I had trouble sorting that one. Try saying a bit more, or try again in a moment.");
+        setLoading(false);
+        return;
+      }
+
       const dump: OrganizedDump = {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
         originalText: text.trim(),
-        ...response,
+        ...normalized,
         completed: {},
       };
       await saveLatestDump(dump);
       setResult(dump);
       setLastOrganized(dump.createdAt);
+      setText('');
+
+      // Fade out helper after successful organize
+      Animated.timing(helperOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
 
       Animated.timing(resultsOpacity, {
         toValue: 1,
@@ -82,16 +156,35 @@ export default function DumpScreen() {
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 300);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Dump] organize error:', err);
-      setError('Something went wrong. Try again in a moment.');
+      const msg: string = err?.message ?? '';
+      if (msg.includes('Network') || msg.includes('fetch')) {
+        setError("Looks like the connection's a little fuzzy. Try again in a moment.");
+      } else {
+        setError("Something got tangled on my end. Take a breath and try again.");
+      }
     } finally {
       setLoading(false);
     }
-  }, [text, resultsOpacity]);
+  }, [text, resultsOpacity, helperOpacity]);
 
   const isDisabled = !text.trim() || loading;
   const relativeTime = lastOrganized ? getRelativeTime(lastOrganized) : null;
+
+  // Show hint only when no fresh result is displayed
+  const showHint = relativeTime !== null && !(result !== null && text.length === 0);
+
+  // First-time helper: only when no saved dump, input empty, no result
+  const showHelper = lastOrganized === null && text.length === 0 && result === null;
+
+  // Warm hint copy
+  const hintText = (() => {
+    if (!relativeTime || !result) return null;
+    const n = countAllItems(result);
+    if (n === 0) return `Last organized: ${relativeTime}`;
+    return `I'm holding ${n} thing${n === 1 ? '' : 's'} for you from ${relativeTime}.`;
+  })();
 
   return (
     <KeyboardAvoidingView
@@ -127,9 +220,19 @@ export default function DumpScreen() {
           />
         </View>
 
+        {/* First-time helper card */}
+        {showHelper && (
+          <Animated.View style={[styles.helperCard, { opacity: helperOpacity }]}>
+            <Text style={styles.helperLabel}>FOR EXAMPLE</Text>
+            <Text style={styles.helperText}>
+              Try something like: I need to sign Mina's school form, order groceries, text the babysitter, and I think I'm forgetting something for Monday…
+            </Text>
+          </Animated.View>
+        )}
+
         {/* Last organized hint */}
-        {relativeTime && (
-          <Text style={styles.lastOrganized}>Last organized: {relativeTime}</Text>
+        {showHint && hintText && (
+          <Text style={styles.lastOrganized}>{hintText}</Text>
         )}
 
         {/* Organize button */}
@@ -152,7 +255,7 @@ export default function DumpScreen() {
         {/* Results */}
         {result && (
           <Animated.View style={[styles.results, { opacity: resultsOpacity }]}>
-            <Text style={styles.resultsHeading}>Here's what you're carrying</Text>
+            <Text style={styles.resultsHeading}>I caught it. Here's what you were holding.</Text>
             <Text style={styles.resultsSubtitle}>You don't have to hold this all in your head.</Text>
 
             {/* Mom Check-In always first */}
@@ -199,7 +302,7 @@ export default function DumpScreen() {
             {/* Errands */}
             {result.errands.length > 0 && (
               <CategorySection
-                title="Errands"
+                title="Errands / Groceries"
                 items={result.errands}
                 accentColor={CategoryColors.errands}
               />
@@ -225,11 +328,13 @@ export default function DumpScreen() {
 
             {/* Holding for Later */}
             {result.holdingForLater.length > 0 && (
-              <View style={styles.holdingSection}>
+              <View>
+                <Text style={styles.holdingIntro}>These can wait. They're safe here.</Text>
                 <CategorySection
                   title="Holding for Later"
                   items={result.holdingForLater}
                   accentColor={CategoryColors.holdingForLater}
+                  variant="parked"
                 />
               </View>
             )}
@@ -261,7 +366,7 @@ const styles = StyleSheet.create({
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
     lineHeight: 22,
-    marginTop: -8,
+    marginTop: 0,
   },
   inputCard: {
     backgroundColor: Colors.card,
@@ -279,12 +384,34 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlignVertical: 'top',
   },
+  helperCard: {
+    backgroundColor: Colors.primaryBlush + '14',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.primaryBlush + '33',
+  },
+  helperLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_700Bold',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  helperText: {
+    fontSize: 14,
+    color: Colors.textBody,
+    fontFamily: 'Nunito_400Regular',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
   lastOrganized: {
     fontSize: 13,
     color: Colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     textAlign: 'center',
-    marginTop: -4,
+    marginTop: 0,
   },
   button: {
     marginTop: 4,
@@ -318,9 +445,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
-    marginTop: -4,
+    marginTop: 0,
   },
-  holdingSection: {
-    opacity: 0.85,
+  holdingIntro: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
+    marginBottom: 6,
   },
 });

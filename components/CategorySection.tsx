@@ -7,13 +7,22 @@ interface CategorySectionProps {
   items: string[];
   accentColor: string;
   emptyHint?: string;
+  variant?: 'default' | 'parked';
 }
 
-export function CategorySection({ title, items, accentColor, emptyHint }: CategorySectionProps) {
-  const badgeBg = accentColor + '33'; // 20% opacity
+export function CategorySection({ title, items, accentColor, emptyHint, variant = 'default' }: CategorySectionProps) {
+  const isParked = variant === 'parked';
+  const badgeBg = accentColor + '33';
+
+  const cardStyle = isParked
+    ? [styles.card, styles.cardParked, items.length === 0 && styles.cardEmpty]
+    : [styles.card, items.length === 0 && styles.cardEmpty];
+
+  const titleStyle = isParked ? [styles.title, styles.titleParked] : styles.title;
+  const itemTextStyle = isParked ? [styles.itemText, styles.itemTextParked] : styles.itemText;
 
   return (
-    <View style={styles.card}>
+    <View style={cardStyle}>
       {/* Accent left border */}
       <View style={[styles.accentBorder, { backgroundColor: accentColor }]} />
 
@@ -21,11 +30,13 @@ export function CategorySection({ title, items, accentColor, emptyHint }: Catego
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <View style={[styles.dot, { backgroundColor: accentColor }]} />
-          <Text style={styles.title}>{title}</Text>
+          <Text style={titleStyle}>{title}</Text>
         </View>
-        <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-          <Text style={[styles.badgeText, { color: accentColor }]}>{items.length}</Text>
-        </View>
+        {items.length > 0 && (
+          <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+            <Text style={[styles.badgeText, { color: accentColor }]}>{items.length}</Text>
+          </View>
+        )}
       </View>
 
       {/* Items */}
@@ -34,7 +45,7 @@ export function CategorySection({ title, items, accentColor, emptyHint }: Catego
           {items.map((item, index) => (
             <View key={index} style={styles.itemRow}>
               <View style={[styles.bullet, { backgroundColor: accentColor }]} />
-              <Text style={styles.itemText}>{item}</Text>
+              <Text style={itemTextStyle}>{item}</Text>
             </View>
           ))}
         </View>
@@ -56,6 +67,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     boxShadow: '0 1px 3px rgba(63, 49, 44, 0.06), 0 4px 12px rgba(63, 49, 44, 0.04)',
   } as object,
+  cardParked: {
+    backgroundColor: Colors.holdingParked + '12',
+    borderColor: Colors.holdingParked + '40',
+  },
+  cardEmpty: {
+    opacity: 0.7,
+  },
   accentBorder: {
     position: 'absolute',
     left: 0,
@@ -86,6 +104,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textMain,
     fontFamily: 'Nunito_700Bold',
+  },
+  titleParked: {
+    color: Colors.textBody,
   },
   badge: {
     paddingHorizontal: 10,
@@ -118,6 +139,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     lineHeight: 22,
     flex: 1,
+  },
+  itemTextParked: {
+    color: Colors.textBody,
+    opacity: 0.85,
   },
   emptyHint: {
     fontSize: 14,

@@ -10,7 +10,7 @@ export function MomCheckInCard({ message }: MomCheckInCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.accentBorder} />
-      <Text style={styles.label}>MOM CHECK-IN</Text>
+      <Text style={styles.label}>A NOTE FOR YOU</Text>
       <Text style={styles.message}>{message}</Text>
     </View>
   );

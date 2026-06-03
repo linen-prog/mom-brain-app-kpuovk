@@ -13,7 +13,6 @@ import { Sun } from 'lucide-react-native';
 import { Colors, CategoryColors } from '@/constants/Colors';
 import { getLatestDump, updateCompleted, OrganizedDump } from '@/utils/storage';
 import { RoundedCheckbox } from '@/components/RoundedCheckbox';
-import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { EmptyState } from '@/components/EmptyState';
 
 function ChecklistItem({
@@ -123,6 +122,8 @@ export default function TodayScreen() {
 
   const doneCount = dump.doToday.filter((_, i) => completed[`doToday:${i}`]).length;
   const totalCount = dump.doToday.length;
+  const thisWeekVisible = dump.thisWeek.slice(0, 3);
+  const thisWeekExtra = dump.thisWeek.length - 3;
 
   return (
     <ScrollView
@@ -152,9 +153,6 @@ export default function TodayScreen() {
         <Text style={styles.encourageBody}>You're not behind. You're carrying a lot.</Text>
       </View>
 
-      {/* Mom Check-In */}
-      {dump.momCheckIn ? <MomCheckInCard message={dump.momCheckIn} /> : null}
-
       {/* Checklist */}
       <View style={styles.checklist}>
         {dump.doToday.map((item, index) => (
@@ -168,22 +166,21 @@ export default function TodayScreen() {
         ))}
       </View>
 
-      {/* This week preview */}
+      {/* This week preview — quiet secondary treatment */}
       {dump.thisWeek.length > 0 && (
-        <View style={styles.thisWeekCard}>
-          <View style={[styles.thisWeekBorder, { backgroundColor: CategoryColors.thisWeek }]} />
-          <Text style={styles.thisWeekLabel}>ON THE HORIZON</Text>
-          <Text style={styles.thisWeekTitle}>This Week</Text>
-          {dump.thisWeek.slice(0, 3).map((item, i) => (
-            <Text key={i} style={styles.thisWeekItem}>
-              {'· '}
-              {item}
-            </Text>
+        <View style={styles.thisWeekSection}>
+          <View style={styles.thisWeekDivider} />
+          <Text style={styles.thisWeekLabel}>LATER THIS WEEK</Text>
+          {thisWeekVisible.map((item, i) => (
+            <View key={i} style={styles.thisWeekRow}>
+              <View style={[styles.thisWeekDot, { backgroundColor: CategoryColors.thisWeek }]} />
+              <Text style={styles.thisWeekItem}>{item}</Text>
+            </View>
           ))}
-          {dump.thisWeek.length > 3 && (
+          {thisWeekExtra > 0 && (
             <Text style={styles.thisWeekMore}>
               {'+ '}
-              {dump.thisWeek.length - 3}
+              {thisWeekExtra}
               {' more'}
             </Text>
           )}
@@ -284,24 +281,14 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     opacity: 0.7,
   },
-  thisWeekCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 16,
-    paddingLeft: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
+  thisWeekSection: {
     marginTop: 4,
+    gap: 8,
   },
-  thisWeekBorder: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+  thisWeekDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: 4,
   },
   thisWeekLabel: {
     fontSize: 11,
@@ -309,25 +296,30 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontFamily: 'Nunito_700Bold',
     letterSpacing: 1,
-    marginBottom: 4,
   },
-  thisWeekTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textMain,
-    fontFamily: 'Nunito_700Bold',
-    marginBottom: 8,
+  thisWeekRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  thisWeekDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 8,
+    flexShrink: 0,
   },
   thisWeekItem: {
     fontSize: 14,
-    color: Colors.textBody,
+    color: Colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     lineHeight: 22,
+    flex: 1,
   },
   thisWeekMore: {
     fontSize: 13,
     color: Colors.textMuted,
     fontFamily: 'Nunito_400Regular',
-    marginTop: 4,
+    marginLeft: 14,
   },
 });

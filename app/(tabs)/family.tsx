@@ -69,13 +69,12 @@ export default function FamilyScreen() {
     );
   }
 
-  const sections = [
-    { key: 'kids', title: 'Kids', items: dump.kids, accent: CategoryColors.kids, emptyHint: 'Nothing for the kids right now.' },
+  const mainSections = [
+    { key: 'kids', title: 'Kids', items: dump.kids, accent: CategoryColors.kids, emptyHint: 'All quiet on the kid front.' },
     { key: 'home', title: 'Home', items: dump.home, accent: CategoryColors.home, emptyHint: 'Home is handled.' },
-    { key: 'errands', title: 'Errands', items: dump.errands, accent: CategoryColors.errands, emptyHint: 'No errands on the list.' },
+    { key: 'errands', title: 'Errands / Groceries', items: dump.errands, accent: CategoryColors.errands, emptyHint: 'No errands on the list.' },
     { key: 'meals', title: 'Meals', items: dump.meals, accent: CategoryColors.meals, emptyHint: 'Meals are sorted.' },
-    { key: 'messages', title: 'Messages', items: dump.messages, accent: CategoryColors.messages, emptyHint: 'No messages to send.' },
-    { key: 'holdingForLater', title: 'Holding for Later', items: dump.holdingForLater, accent: CategoryColors.holdingForLater, emptyHint: 'This can wait.' },
+    { key: 'messages', title: 'Messages', items: dump.messages, accent: CategoryColors.messages, emptyHint: 'No messages waiting.' },
   ];
 
   return (
@@ -90,18 +89,28 @@ export default function FamilyScreen() {
       <Text style={styles.title}>Family</Text>
       <Text style={styles.subtitle}>Everything you're carrying, sorted.</Text>
 
-      {sections.map((section, index) => (
+      {mainSections.map((section, index) => (
         <FadeInSection key={section.key} delay={index * 60}>
-          <View style={section.key === 'holdingForLater' ? styles.holdingWrap : undefined}>
-            <CategorySection
-              title={section.title}
-              items={section.items}
-              accentColor={section.accent}
-              emptyHint={section.emptyHint}
-            />
-          </View>
+          <CategorySection
+            title={section.title}
+            items={section.items}
+            accentColor={section.accent}
+            emptyHint={section.emptyHint}
+          />
         </FadeInSection>
       ))}
+
+      {/* Holding for Later — parked zone */}
+      <FadeInSection delay={mainSections.length * 60}>
+        <Text style={styles.holdingIntro}>These can wait. They're safe here.</Text>
+        <CategorySection
+          title="Holding for Later"
+          items={dump.holdingForLater}
+          accentColor={CategoryColors.holdingForLater}
+          emptyHint="Nothing parked here."
+          variant="parked"
+        />
+      </FadeInSection>
     </ScrollView>
   );
 }
@@ -133,7 +142,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     lineHeight: 22,
   },
-  holdingWrap: {
-    opacity: 0.85,
+  holdingIntro: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
+    marginBottom: 6,
   },
 });

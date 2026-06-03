@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import { useRef, useCallback } from 'react';
 
 interface EmptyStateProps {
   icon?: React.ReactNode;
