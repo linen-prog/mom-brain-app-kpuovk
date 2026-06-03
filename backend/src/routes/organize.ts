@@ -174,8 +174,14 @@ function isRateLimitError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as any;
   if (e.statusCode === 429) return true;
+  if (e.status === 429) return true;
   if (e.name === 'GatewayRateLimitError') return true;
-  if (typeof e.message === 'string' && e.message.toLowerCase().includes('rate')) return true;
+  if (typeof e.message === 'string') {
+    const msg = e.message.toLowerCase();
+    if (msg.includes('rate')) return true;
+    if (msg.includes('429')) return true;
+    if (msg.includes('too many requests')) return true;
+  }
   return false;
 }
 
@@ -259,53 +265,74 @@ export function register(app: App, fastify: FastifyInstance) {
       const startTime = Date.now();
       const trimmedText = text.trim();
 
-      try {
-        const result = await generateObject({
-          model: gateway('openai/gpt-4o-mini'),
-          schema: OrganizeSchema,
-          system: SYSTEM_PROMPT,
-          prompt: `Please organize this brain dump:\n\n${trimmedText}`,
-        });
-
-        const elapsedMs = Date.now() - startTime;
-
-        app.logger.info(
-          {
-            elapsedMs,
-            doTodayCount: result.object.doToday.length,
-            thisWeekCount: result.object.thisWeek.length,
-            kidsCount: result.object.kids.length,
-            homeCount: result.object.home.length,
-            errandsCount: result.object.errands.length,
-            mealsCount: result.object.meals.length,
-            messagesCount: result.object.messages.length,
-            holdingForLaterCount: result.object.holdingForLater.length,
-          },
-          'Successfully organized brain dump',
-        );
-
-        return reply.status(200).send(result.object);
-      } catch (error) {
-        if (isRateLimitError(error)) {
-          app.logger.warn(
-            { err: error, textLength: trimmedText.length },
-            'Rate limit exceeded',
-          );
-          return reply.status(429).send({
-            error: 'rate_limited',
-            message: 'Mom Brain needs a minute to catch up. Try again shortly.',
+      // Retry logic for rate limits with exponential backoff
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const result = await generateObject({
+            model: gateway('openai/gpt-4o-mini'),
+            schema: OrganizeSchema,
+            system: SYSTEM_PROMPT,
+            prompt: `Please organize this brain dump:\n\n${trimmedText}`,
           });
-        }
 
-        app.logger.error(
-          { err: error, textLength: trimmedText.length },
-          'Failed to organize',
-        );
-        return reply.status(500).send({
-          error: 'server_error',
-          message: 'Something got tangled. Try again.',
-        });
+          const elapsedMs = Date.now() - startTime;
+
+          app.logger.info(
+            {
+              elapsedMs,
+              attempts: attempt + 1,
+              doTodayCount: result.object.doToday.length,
+              thisWeekCount: result.object.thisWeek.length,
+              kidsCount: result.object.kids.length,
+              homeCount: result.object.home.length,
+              errandsCount: result.object.errands.length,
+              mealsCount: result.object.meals.length,
+              messagesCount: result.object.messages.length,
+              holdingForLaterCount: result.object.holdingForLater.length,
+            },
+            'Successfully organized brain dump',
+          );
+
+          return reply.status(200).send(result.object);
+        } catch (error) {
+          lastError = error;
+
+          if (!isRateLimitError(error)) {
+            // Not a rate limit error, fail immediately
+            break;
+          }
+
+          if (attempt < 4) {
+            // Wait before retrying with longer delays: 2s, 4s, 6s, 8s
+            const delayMs = (attempt + 1) * 2000;
+            app.logger.warn(
+              { attempt: attempt + 1, delayMs, err: error },
+              'Rate limited, retrying',
+            );
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          } else {
+            // Out of retries
+            app.logger.warn(
+              { attempts: attempt + 1, err: error, textLength: trimmedText.length },
+              'Rate limit exceeded after retries',
+            );
+            return reply.status(429).send({
+              error: 'rate_limited',
+              message: 'Mom Brain needs a minute to catch up. Try again shortly.',
+            });
+          }
+        }
       }
+
+      app.logger.error(
+        { err: lastError, textLength: trimmedText.length },
+        'Failed to organize',
+      );
+      return reply.status(500).send({
+        error: 'server_error',
+        message: 'Something got tangled. Try again.',
+      });
     },
   );
 }

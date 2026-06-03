@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { api, authenticatedApi, signUpTestUser, expectStatus, connectWebSocket, connectAuthenticatedWebSocket, waitForMessage } from "./helpers";
+import { api, authenticatedApi, signUpTestUser, expectStatus, connectWebSocket, connectAuthenticatedWebSocket, waitForMessage, createTestFile, createTestAudioFile } from "./helpers";
 
 describe("API Integration Tests", () => {
   // Shared state for chaining tests (e.g., created resource IDs, auth tokens)
@@ -8,6 +8,9 @@ describe("API Integration Tests", () => {
 
   describe("POST /api/organize", () => {
     test("Organize brain dump with valid text", async () => {
+      // Add initial delay to allow server to start up
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       const res = await api("/api/organize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,6 +45,9 @@ describe("API Integration Tests", () => {
     });
 
     test("Organize brain dump with longer text", async () => {
+      // Add longer delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
       const res = await api("/api/organize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,6 +62,9 @@ describe("API Integration Tests", () => {
     });
 
     test("Organize brain dump with minimal text", async () => {
+      // Add longer delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
       const res = await api("/api/organize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -107,6 +116,50 @@ describe("API Integration Tests", () => {
         body: JSON.stringify({ text: "   \n\t  " }),
       });
       await expectStatus(res, 400);
+    });
+  });
+
+  describe("POST /api/transcribe", () => {
+    test("Transcribe valid audio file", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      const form = new FormData();
+      form.append("audio", createTestAudioFile("test.wav", 500));
+
+      const res = await api("/api/transcribe", {
+        method: "POST",
+        body: form,
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("text");
+      expect(typeof data.text).toBe("string");
+    });
+
+    test("Reject request with missing audio file", async () => {
+      const form = new FormData();
+
+      const res = await api("/api/transcribe", {
+        method: "POST",
+        body: form,
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with empty audio file", async () => {
+      const form = new FormData();
+      form.append("audio", new File([], "empty.wav", { type: "audio/wav" }));
+
+      const res = await api("/api/transcribe", {
+        method: "POST",
+        body: form,
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
     });
   });
 });

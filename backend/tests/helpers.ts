@@ -120,6 +120,60 @@ export function createTestFile(filename = "test.txt", content = "test file conte
   return new File([content], filename, { type });
 }
 
+/**
+ * Create a minimal valid WAV file for audio transcription testing.
+ * Returns a File object with a properly formatted WAV header and audio data with a simple tone.
+ * This generates a 1000 Hz sine wave tone that Whisper can process.
+ */
+export function createTestAudioFile(filename = "test.wav", durationMs = 500): File {
+  const sampleRate = 16000;
+  const channels = 1;
+  const bitsPerSample = 16;
+  const bytesPerSample = bitsPerSample / 8;
+  const numSamples = Math.floor((durationMs * sampleRate) / 1000);
+  const audioDataSize = numSamples * channels * bytesPerSample;
+
+  // Create WAV file
+  const buffer = new ArrayBuffer(44 + audioDataSize);
+  const view = new DataView(buffer);
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+
+  // RIFF header
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + audioDataSize, true);
+  writeString(8, "WAVE");
+
+  // fmt subchunk
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true); // Subchunk1Size
+  view.setUint16(20, 1, true); // AudioFormat (1 = PCM)
+  view.setUint16(22, channels, true); // NumChannels
+  view.setUint32(24, sampleRate, true); // SampleRate
+  view.setUint32(28, sampleRate * channels * bytesPerSample, true); // ByteRate
+  view.setUint16(32, channels * bytesPerSample, true); // BlockAlign
+  view.setUint16(34, bitsPerSample, true); // BitsPerSample
+
+  // data subchunk
+  writeString(36, "data");
+  view.setUint32(40, audioDataSize, true);
+
+  // Add audio data - generate a simple 1000 Hz sine wave tone
+  const frequency = 1000;
+  const amplitude = 20000; // ~60% of max int16 value
+  for (let i = 0; i < numSamples; i++) {
+    const sampleIndex = 44 + i * bytesPerSample;
+    // Generate sine wave
+    const sample = amplitude * Math.sin((2 * Math.PI * frequency * i) / sampleRate);
+    view.setInt16(sampleIndex, Math.floor(sample), true);
+  }
+
+  return new File([buffer], filename, { type: "audio/wav" });
+}
+
 const WS_URL = BASE_URL.replace(/^http/, "ws");
 
 /**
