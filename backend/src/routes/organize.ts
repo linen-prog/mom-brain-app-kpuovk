@@ -304,8 +304,8 @@ export function register(app: App, fastify: FastifyInstance) {
           }
 
           if (attempt < 4) {
-            // Wait before retrying with longer delays: 2s, 4s, 6s, 8s
-            const delayMs = (attempt + 1) * 2000;
+            // Wait before retrying with exponential backoff: 3s, 6s, 12s, 24s
+            const delayMs = Math.pow(3, attempt + 1) * 1000;
             app.logger.warn(
               { attempt: attempt + 1, delayMs, err: error },
               'Rate limited, retrying',

@@ -9,7 +9,7 @@ describe("API Integration Tests", () => {
   describe("POST /api/organize", () => {
     test("Organize brain dump with valid text", async () => {
       // Add initial delay to allow server to start up
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       const res = await api("/api/organize", {
         method: "POST",
@@ -158,6 +158,19 @@ describe("API Integration Tests", () => {
         body: form,
       });
       await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with file too large", async () => {
+      const form = new FormData();
+      form.append("audio", createTestFile("large.wav", 100 * 1024 * 1024, "audio/wav"));
+
+      const res = await api("/api/transcribe", {
+        method: "POST",
+        body: form,
+      });
+      await expectStatus(res, 413);
       const data = await res.json();
       expect(data).toHaveProperty("error");
     });

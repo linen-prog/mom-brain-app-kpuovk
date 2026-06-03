@@ -117,8 +117,8 @@ export function register(app: App, fastify: FastifyInstance) {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const { text } = await generateText({
-            model: gateway('google/gemini-flash'),
-            system: 'Transcribe this audio exactly as spoken. Return only the transcription text, no commentary, no punctuation corrections, no formatting. If the audio is silent or contains no speech, return an empty string.',
+            model: gateway('google/gemini-2.0-flash'),
+            system: 'Output ONLY the transcribed words, nothing else. If there is no speech or the audio is silent, output an empty string and nothing else. Do not explain, do not apologize, do not add any commentary.',
             messages: [
               {
                 role: 'user',
@@ -133,14 +133,35 @@ export function register(app: App, fastify: FastifyInstance) {
             ],
           });
 
+          // Guard against model refusals
+          const REFUSAL_PREFIXES = [
+            'i cannot',
+            "i'm unable",
+            'i am unable',
+            'sorry',
+            'there is no audio',
+            'there is no speech',
+            'no speech',
+            "i don't",
+            'i do not',
+            'the audio',
+            'this audio',
+            'it appears',
+            'it seems',
+            'unfortunately',
+          ];
+          const lower = text.trim().toLowerCase();
+          const isRefusal = REFUSAL_PREFIXES.some(p => lower.startsWith(p));
+          const finalText = isRefusal ? '' : text.trim();
+
           const elapsedMs = Date.now() - startTime;
 
           app.logger.info(
-            { elapsedMs, textLength: text.length, fileSize, mimeType, attempts: attempt + 1 },
+            { elapsedMs, textLength: finalText.length, fileSize, mimeType, attempts: attempt + 1 },
             'Successfully transcribed audio',
           );
 
-          return reply.status(200).send({ text });
+          return reply.status(200).send({ text: finalText });
         } catch (error) {
           lastError = error;
 
