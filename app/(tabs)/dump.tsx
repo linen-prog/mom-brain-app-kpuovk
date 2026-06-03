@@ -8,20 +8,38 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+} from 'expo-audio';
 import { Colors, CategoryColors } from '@/constants/Colors';
 import { organizeText, OrganizeError, OrganizeResponse } from '@/utils/api';
 import { getLatestDump, saveLatestDump, OrganizedDump } from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { requestMicPermission, transcribeAudio, VoiceError } from '@/utils/voice';
+import { IconSymbol } from '@/components/IconSymbol';
 
 const FALLBACK_CHECK_IN = "I caught it all. Pick one small thing — that's enough.";
 
+// ─── Voice UI state ───────────────────────────────────────────────────────────
+type VoiceState = 'idle' | 'recording' | 'transcribing' | 'permission_needed';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function normalizeResponse(r: any): OrganizeResponse {
-  const arr = (v: any) => (Array.isArray(v) ? v.filter((x: any) => typeof x === 'string' && x.trim().length > 0) : []);
+  const arr = (v: any) =>
+    Array.isArray(v) ? v.filter((x: any) => typeof x === 'string' && x.trim().length > 0) : [];
   return {
     doToday: arr(r?.doToday),
     thisWeek: arr(r?.thisWeek),
@@ -64,6 +82,8 @@ function countAllItems(dump: OrganizedDump): number {
   );
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function DumpScreen() {
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
@@ -72,10 +92,24 @@ export default function DumpScreen() {
   const [result, setResult] = useState<OrganizedDump | null>(null);
   const [lastOrganized, setLastOrganized] = useState<string | null>(null);
 
+  // Voice state
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  // expo-audio hook — must be called at top level
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
+
+  // Animations
   const resultsOpacity = useRef(new Animated.Value(0)).current;
   const helperOpacity = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Load saved dump ──────────────────────────────────────────────────────
   useEffect(() => {
     getLatestDump().then((dump) => {
       if (dump) {
@@ -86,9 +120,8 @@ export default function DumpScreen() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Helper fade ──────────────────────────────────────────────────────────
   const hasText = text.length > 0;
-
-  // Fade out helper when user starts typing
   useEffect(() => {
     Animated.timing(helperOpacity, {
       toValue: hasText ? 0 : 1,
@@ -97,6 +130,55 @@ export default function DumpScreen() {
     }).start();
   }, [hasText, helperOpacity]);
 
+  // ── Pulse animation for recording state ─────────────────────────────────
+  useEffect(() => {
+    if (voiceState === 'recording') {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.82,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoopRef.current = loop;
+      loop.start();
+    } else {
+      pulseLoopRef.current?.stop();
+      pulseAnim.setValue(1);
+    }
+    return () => {
+      pulseLoopRef.current?.stop();
+    };
+  }, [voiceState, pulseAnim]);
+
+  // ── Cleanup success timer on unmount ────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  // ── Show success caption briefly ────────────────────────────────────────
+  const showSuccessCaption = useCallback(() => {
+    successOpacity.setValue(1);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => {
+      Animated.timing(successOpacity, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    }, 4000);
+  }, [successOpacity]);
+
+  // ── Organize handler ─────────────────────────────────────────────────────
   const handleOrganize = useCallback(async () => {
     if (!text.trim()) return;
     console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length);
@@ -109,7 +191,6 @@ export default function DumpScreen() {
       const raw = await organizeText(text.trim());
       const normalized = normalizeResponse(raw);
 
-      // Check if AI returned nothing useful
       const allEmpty =
         normalized.doToday.length === 0 &&
         normalized.thisWeek.length === 0 &&
@@ -140,7 +221,6 @@ export default function DumpScreen() {
       setLastOrganized(dump.createdAt);
       setText('');
 
-      // Fade out helper after successful organize
       Animated.timing(helperOpacity, {
         toValue: 0,
         duration: 250,
@@ -174,21 +254,129 @@ export default function DumpScreen() {
     }
   }, [text, resultsOpacity, helperOpacity]);
 
+  // ── Voice: tap mic button ────────────────────────────────────────────────
+  const handleMicPress = useCallback(async () => {
+    console.log('[Voice] Mic button pressed — current voiceState:', voiceState);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (voiceState === 'recording') {
+      // Stop recording
+      console.log('[Voice] Stopping recording…');
+      setVoiceState('transcribing');
+      setVoiceError(null);
+      try {
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
+        const durationSec = recorderState.durationMillis
+          ? recorderState.durationMillis / 1000
+          : audioRecorder.currentTime;
+        console.log('[Voice] Recording stopped — uri:', uri, '| duration (s):', durationSec);
+
+        if (!uri) {
+          throw new VoiceError('recording_failed', 'Something got tangled while listening. Try again.');
+        }
+
+        const transcript = await transcribeAudio(uri);
+        setText((prev) => {
+          const next = prev.trim() ? prev.trim() + ' ' + transcript : transcript;
+          console.log('[Voice] Text updated — new length:', next.length);
+          return next;
+        });
+        setVoiceState('idle');
+        showSuccessCaption();
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }, 200);
+      } catch (err: unknown) {
+        console.error('[Voice] Error during stop/transcribe:', err);
+        if (err instanceof VoiceError) {
+          setVoiceError(err.userMessage);
+        } else {
+          setVoiceError('Something got tangled while listening. Try again.');
+        }
+        setVoiceState('idle');
+      }
+      return;
+    }
+
+    if (voiceState === 'transcribing') {
+      // Ignore taps while transcribing
+      return;
+    }
+
+    // idle or permission_needed → request permission then start
+    const granted = await requestMicPermission();
+    if (!granted) {
+      console.warn('[Voice] Microphone permission denied');
+      setVoiceState('permission_needed');
+      setVoiceError(null);
+      return;
+    }
+
+    // Start recording
+    try {
+      console.log('[Voice] Starting recording…');
+      setVoiceError(null);
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setVoiceState('recording');
+      console.log('[Voice] Recording started');
+    } catch (err: unknown) {
+      console.error('[Voice] Failed to start recording:', err);
+      setVoiceError('Something got tangled while listening. Try again.');
+      setVoiceState('idle');
+    }
+  }, [voiceState, audioRecorder, recorderState.durationMillis, showSuccessCaption]);
+
+  // ── Stop button (inside recording card) ─────────────────────────────────
+  const handleStopPress = useCallback(() => {
+    console.log('[Voice] Stop button pressed');
+    handleMicPress();
+  }, [handleMicPress]);
+
+  // ── Open Settings ────────────────────────────────────────────────────────
+  const handleOpenSettings = useCallback(() => {
+    console.log('[Voice] Opening device Settings for microphone permission');
+    Linking.openSettings();
+  }, []);
+
+  // ── Derived display values ───────────────────────────────────────────────
   const isDisabled = !text.trim() || loading;
   const relativeTime = lastOrganized ? getRelativeTime(lastOrganized) : null;
-
-  // Show hint only when no fresh result is displayed
   const showHint = relativeTime !== null && !(result !== null && text.length === 0);
+  const showHelper =
+    lastOrganized === null &&
+    text.length === 0 &&
+    result === null &&
+    voiceState === 'idle';
 
-  // First-time helper: only when no saved dump, input empty, no result
-  const showHelper = lastOrganized === null && text.length === 0 && result === null;
-
-  // Warm hint copy
   const hintText = (() => {
     if (!relativeTime || !result) return null;
     const n = countAllItems(result);
     if (n === 0) return `Last organized: ${relativeTime}`;
     return `I'm holding ${n} thing${n === 1 ? '' : 's'} for you from ${relativeTime}.`;
+  })();
+
+  // Mic button appearance
+  const isRecording = voiceState === 'recording';
+  const isTranscribing = voiceState === 'transcribing';
+  const micBgColor = isRecording ? Colors.secondaryMauve : Colors.primaryBlush;
+  const micIconName = isRecording ? 'stop' : 'mic';
+
+  // Voice status card copy
+  const voiceCardCopy = (() => {
+    if (voiceState === 'recording') return 'Listening… say it messy.';
+    if (voiceState === 'transcribing') return 'Turning your words into text…';
+    if (voiceState === 'permission_needed')
+      return 'I need microphone permission before I can listen. Tap the mic again to try, or open Settings.';
+    return null;
+  })();
+
+  // Error message for voice errors (uses same warm-error-card style)
+  const voiceErrorMessage = (() => {
+    if (!voiceError) return null;
+    return voiceError;
   })();
 
   return (
@@ -210,7 +398,7 @@ export default function DumpScreen() {
         <Text style={styles.appName}>Mom Brain</Text>
         <Text style={styles.tagline}>Say it messy. I'll sort it out.</Text>
 
-        {/* Input card */}
+        {/* Input card with mic button */}
         <View style={styles.inputCard}>
           <TextInput
             style={styles.textInput}
@@ -221,16 +409,85 @@ export default function DumpScreen() {
             value={text}
             onChangeText={setText}
             textAlignVertical="top"
-            editable={!loading}
+            editable={!loading && voiceState !== 'transcribing'}
           />
+          {/* Mic button — bottom-right of card */}
+          <View style={styles.micRow}>
+            <Text style={styles.talkCaption}>Talk it out.</Text>
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <TouchableOpacity
+                style={[styles.micButton, { backgroundColor: micBgColor }]}
+                onPress={handleMicPress}
+                disabled={isTranscribing}
+                activeOpacity={0.8}
+                accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice recording'}
+              >
+                <IconSymbol
+                  android_material_icon_name={micIconName}
+                  size={22}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         </View>
+
+        {/* Voice status card */}
+        {voiceCardCopy !== null && (
+          <View
+            style={[
+              styles.voiceCard,
+              voiceState === 'permission_needed' && styles.voiceCardPermission,
+            ]}
+          >
+            <View style={styles.voiceCardRow}>
+              {isTranscribing && (
+                <ActivityIndicator
+                  size="small"
+                  color={Colors.primaryDeepRose}
+                  style={styles.voiceSpinner}
+                />
+              )}
+              <Text style={styles.voiceCardText}>{voiceCardCopy}</Text>
+            </View>
+            {voiceState === 'recording' && (
+              <PrimaryButton
+                label="Stop"
+                onPress={handleStopPress}
+                style={styles.stopButton}
+              />
+            )}
+            {voiceState === 'permission_needed' && (
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={handleOpenSettings}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.settingsButtonText}>Open Settings</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Voice error card */}
+        {voiceErrorMessage !== null && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{voiceErrorMessage}</Text>
+          </View>
+        )}
+
+        {/* Success caption — fades after 4s */}
+        <Animated.Text style={[styles.successCaption, { opacity: successOpacity }]}>
+          I caught your words. You can edit before organizing.
+        </Animated.Text>
 
         {/* First-time helper card */}
         {showHelper && (
           <Animated.View style={[styles.helperCard, { opacity: helperOpacity }]}>
             <Text style={styles.helperLabel}>FOR EXAMPLE</Text>
             <Text style={styles.helperText}>
-              Try something like: I need to sign Mina's school form, order groceries, text the babysitter, and I think I'm forgetting something for Monday…
+              Try something like: I need to sign Mina's school form, order groceries, text the
+              babysitter, and I think I'm forgetting something for Monday…
             </Text>
           </Animated.View>
         )}
@@ -250,7 +507,7 @@ export default function DumpScreen() {
           style={styles.button}
         />
 
-        {/* Error message */}
+        {/* Organize error message */}
         {error && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
@@ -263,12 +520,10 @@ export default function DumpScreen() {
             <Text style={styles.resultsHeading}>I caught it. Here's what you were holding.</Text>
             <Text style={styles.resultsSubtitle}>You don't have to hold this all in your head.</Text>
 
-            {/* Mom Check-In always first */}
             {result.momCheckIn ? (
               <MomCheckInCard message={result.momCheckIn} />
             ) : null}
 
-            {/* Do Today */}
             {result.doToday.length > 0 && (
               <CategorySection
                 title="Do Today"
@@ -277,7 +532,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* This Week */}
             {result.thisWeek.length > 0 && (
               <CategorySection
                 title="This Week"
@@ -286,7 +540,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* Kids */}
             {result.kids.length > 0 && (
               <CategorySection
                 title="Kids"
@@ -295,7 +548,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* Home */}
             {result.home.length > 0 && (
               <CategorySection
                 title="Home"
@@ -304,7 +556,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* Errands */}
             {result.errands.length > 0 && (
               <CategorySection
                 title="Errands / Groceries"
@@ -313,7 +564,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* Meals */}
             {result.meals.length > 0 && (
               <CategorySection
                 title="Meals"
@@ -322,7 +572,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* Messages */}
             {result.messages.length > 0 && (
               <CategorySection
                 title="Messages"
@@ -331,7 +580,6 @@ export default function DumpScreen() {
               />
             )}
 
-            {/* Holding for Later */}
             {result.holdingForLater.length > 0 && (
               <View>
                 <Text style={styles.holdingIntro}>These can wait. They're safe here.</Text>
@@ -349,6 +597,8 @@ export default function DumpScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   flex: {
@@ -388,6 +638,83 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     lineHeight: 24,
     textAlignVertical: 'top',
+  },
+  micRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    gap: 10,
+  },
+  talkCaption: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
+  },
+  micButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3F312C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  // Voice status card
+  voiceCard: {
+    backgroundColor: Colors.primaryBlush + '18',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.primaryBlush + '44',
+    gap: 10,
+  },
+  voiceCardPermission: {
+    backgroundColor: Colors.clay + '14',
+    borderColor: Colors.clay + '33',
+  },
+  voiceCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  voiceSpinner: {
+    marginRight: 2,
+  },
+  voiceCardText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textBody,
+    fontFamily: 'Nunito_400Regular',
+    lineHeight: 20,
+  },
+  stopButton: {
+    marginTop: 2,
+  },
+  settingsButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.primaryDeepRose + '22',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.primaryDeepRose + '44',
+  },
+  settingsButtonText: {
+    fontSize: 13,
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_700Bold',
+  },
+  successCaption: {
+    fontSize: 13,
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   helperCard: {
     backgroundColor: Colors.primaryBlush + '14',
