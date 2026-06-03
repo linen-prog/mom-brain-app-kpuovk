@@ -21,11 +21,9 @@ function RhythmCard({ title, accent, delay }: RhythmCardProps) {
   const translateY = useRef(new Animated.Value(14)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 400, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 400, delay, useNativeDriver: true }),
-    ]).start();
-  }, []);
+    Animated.timing(opacity, { toValue: 1, duration: 400, delay, useNativeDriver: true }).start();
+    Animated.timing(translateY, { toValue: 0, duration: 400, delay, useNativeDriver: true }).start();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Animated.View style={[styles.card, { opacity, transform: [{ translateY }] }]}>

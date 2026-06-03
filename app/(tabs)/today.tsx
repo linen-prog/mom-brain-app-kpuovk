@@ -44,7 +44,7 @@ function ChecklistItem({
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Animated.View style={[styles.checkItem, { opacity, transform: [{ translateY }] }]}>

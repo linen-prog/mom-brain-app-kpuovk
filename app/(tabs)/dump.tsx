@@ -84,7 +84,7 @@ export default function DumpScreen() {
         resultsOpacity.setValue(1);
       }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasText = text.length > 0;
 
