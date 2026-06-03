@@ -23,7 +23,7 @@ export function register(app: App, fastify: FastifyInstance) {
     '/api/transcribe',
     {
       schema: {
-        description: 'Transcribe an audio file using OpenAI Whisper',
+        description: 'Transcribe an audio file using Google Gemini Flash',
         tags: ['transcribe'],
         response: {
           200: {
@@ -71,7 +71,7 @@ export function register(app: App, fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       app.logger.info('POST /api/transcribe');
 
-      const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
+      const data = await request.file({ limits: { fileSize: 25 * 1024 * 1024 } });
 
       if (!data) {
         app.logger.warn('Audio file is required');
@@ -106,24 +106,27 @@ export function register(app: App, fastify: FastifyInstance) {
 
       app.logger.info(
         { fileSize, mimeType },
-        'Transcribing audio',
+        'Transcribing audio with Gemini Flash',
       );
+
+      // Convert audio buffer to base64 data URL for Gemini
+      const base64Audio = buffer.toString('base64');
 
       // Retry logic for rate limits with exponential backoff
       let lastError: unknown;
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const { text } = await generateText({
-            model: gateway('openai/whisper-1'),
+            model: gateway('google/gemini-flash'),
+            system: 'Transcribe this audio exactly as spoken. Return only the transcription text, no commentary, no punctuation corrections, no formatting. If the audio is silent or contains no speech, return an empty string.',
             messages: [
               {
                 role: 'user',
                 content: [
-                  { type: 'text', text: 'Transcribe this audio.' },
                   {
                     type: 'file',
                     mediaType: mimeType,
-                    data: buffer,
+                    data: base64Audio,
                   },
                 ],
               },
@@ -171,7 +174,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
       // Check if it's an invalid audio format error
       const errMsg = (lastError as any)?.message?.toLowerCase?.() || '';
-      if (errMsg.includes('invalid') || errMsg.includes('audio') || errMsg.includes('format')) {
+      if (errMsg.includes('invalid') || (errMsg.includes('audio') && errMsg.includes('format'))) {
         app.logger.warn(
           { err: lastError, fileSize, mimeType },
           'Invalid audio format or file',
