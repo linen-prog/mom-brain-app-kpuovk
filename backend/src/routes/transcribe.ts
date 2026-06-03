@@ -152,6 +152,7 @@ export function register(app: App, fastify: FastifyInstance) {
                 ],
               },
             ],
+            maxRetries: 0,
           });
 
           const rawLength = text.length;
