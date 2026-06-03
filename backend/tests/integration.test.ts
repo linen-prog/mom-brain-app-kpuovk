@@ -55,6 +55,20 @@ describe("API Integration Tests", () => {
       expect(data.thisWeek).toBeDefined();
     });
 
+    test("Organize brain dump with minimal text", async () => {
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Call mom",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("doToday");
+      expect(data).toHaveProperty("momCheckIn");
+    });
+
     test("Reject request with missing text field", async () => {
       const res = await api("/api/organize", {
         method: "POST",
