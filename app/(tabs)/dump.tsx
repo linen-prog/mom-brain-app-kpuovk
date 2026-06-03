@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Colors, CategoryColors } from '@/constants/Colors';
-import { organizeText, OrganizeResponse } from '@/utils/api';
+import { organizeText, OrganizeError, OrganizeResponse } from '@/utils/api';
 import { getLatestDump, saveLatestDump, OrganizedDump } from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
@@ -156,13 +156,18 @@ export default function DumpScreen() {
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 300);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Dump] organize error:', err);
-      const msg: string = err?.message ?? '';
-      if (msg.includes('Network') || msg.includes('fetch')) {
-        setError("Looks like the connection's a little fuzzy. Try again in a moment.");
+      if (err instanceof OrganizeError) {
+        if (err.kind === 'rate_limited') {
+          setError("Mom Brain needs a minute to catch up. Try again shortly.");
+        } else if (err.kind === 'network') {
+          setError("I couldn't reach the cloud. Check your connection and try again.");
+        } else {
+          setError("Something got tangled on my end. Give it another try in a moment.");
+        }
       } else {
-        setError("Something got tangled on my end. Take a breath and try again.");
+        setError("Something got tangled on my end. Give it another try in a moment.");
       }
     } finally {
       setLoading(false);
