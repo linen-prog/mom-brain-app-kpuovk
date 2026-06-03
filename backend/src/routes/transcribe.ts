@@ -137,7 +137,7 @@ export function register(app: App, fastify: FastifyInstance) {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const { text } = await generateText({
-            model: gateway('google/gemini-2.0-flash'),
+            model: gateway('google/gemini-2.5-flash'),
             system:
               'Transcribe the speech in this audio. Output ONLY the transcribed words exactly as spoken — no commentary, no formatting, no quotation marks, no introductory phrases. If the audio contains no speech (silence, noise, music with no words), output an empty string and nothing else.',
             messages: [
