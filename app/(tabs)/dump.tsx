@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -29,6 +31,17 @@ import { CategorySection } from '@/components/CategorySection';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { requestMicPermission, transcribeAudio, VoiceError } from '@/utils/voice';
 import { IconSymbol } from '@/components/IconSymbol';
+
+// ─── Mic illustration assets ──────────────────────────────────────────────────
+const MIC_IDLE = require('@/assets/images/36718f89-1e02-496d-ae89-2b43ddce4a4c.jpeg');
+const MIC_RECORDING = require('@/assets/images/d37fa240-ea5b-4a98-9534-9a3b539c3b04.jpeg');
+const MIC_TRANSCRIBING = require('@/assets/images/48850389-54f0-4669-a9bb-eb1bdaa1ff0d.jpeg');
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 const FALLBACK_CHECK_IN = "I caught it all. Pick one small thing — that's enough.";
 
@@ -104,9 +117,11 @@ export default function DumpScreen() {
   const resultsOpacity = useRef(new Animated.Value(0)).current;
   const helperOpacity = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
   const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const rotateLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load saved dump ──────────────────────────────────────────────────────
@@ -130,19 +145,19 @@ export default function DumpScreen() {
     }).start();
   }, [hasText, helperOpacity]);
 
-  // ── Pulse animation for recording state ─────────────────────────────────
+  // ── Pulse animation for recording state (opacity only, no scale) ────────
   useEffect(() => {
     if (voiceState === 'recording') {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 0.82,
-            duration: 500,
+            toValue: 0.85,
+            duration: 700,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 500,
+            duration: 700,
             useNativeDriver: true,
           }),
         ])
@@ -157,6 +172,28 @@ export default function DumpScreen() {
       pulseLoopRef.current?.stop();
     };
   }, [voiceState, pulseAnim]);
+
+  // ── Rotate animation for transcribing state ──────────────────────────────
+  useEffect(() => {
+    if (voiceState === 'transcribing') {
+      rotateAnim.setValue(0);
+      const loop = Animated.loop(
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 6000,
+          useNativeDriver: true,
+        })
+      );
+      rotateLoopRef.current = loop;
+      loop.start();
+    } else {
+      rotateLoopRef.current?.stop();
+      rotateAnim.setValue(0);
+    }
+    return () => {
+      rotateLoopRef.current?.stop();
+    };
+  }, [voiceState, rotateAnim]);
 
   // ── Cleanup success timer on unmount ────────────────────────────────────
   useEffect(() => {
@@ -361,8 +398,21 @@ export default function DumpScreen() {
   // Mic button appearance
   const isRecording = voiceState === 'recording';
   const isTranscribing = voiceState === 'transcribing';
-  const micBgColor = isRecording ? Colors.secondaryMauve : Colors.primaryBlush;
-  const micIconName = isRecording ? 'stop' : 'mic';
+
+  const micSource =
+    voiceState === 'transcribing' ? MIC_TRANSCRIBING :
+    voiceState === 'recording' ? MIC_RECORDING :
+    MIC_IDLE;
+
+  const micAccessibilityLabel =
+    voiceState === 'transcribing' ? 'Transcribing' :
+    voiceState === 'recording' ? 'Stop recording' :
+    'Start voice dump';
+
+  const rotateInterpolation = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   // Voice status card copy
   const voiceCardCopy = (() => {
@@ -414,18 +464,20 @@ export default function DumpScreen() {
           {/* Mic button — bottom-right of card */}
           <View style={styles.micRow}>
             <Text style={styles.talkCaption}>Talk it out.</Text>
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <Animated.View style={{ opacity: pulseAnim }}>
               <TouchableOpacity
-                style={[styles.micButton, { backgroundColor: micBgColor }]}
                 onPress={handleMicPress}
                 disabled={isTranscribing}
-                activeOpacity={0.8}
-                accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice recording'}
+                activeOpacity={0.9}
+                accessibilityLabel={micAccessibilityLabel}
               >
-                <IconSymbol
-                  android_material_icon_name={micIconName}
-                  size={22}
-                  color="#FFFFFF"
+                <Animated.Image
+                  source={resolveImageSource(micSource)}
+                  style={[
+                    styles.micImage,
+                    isTranscribing && { transform: [{ rotate: rotateInterpolation }] },
+                  ]}
+                  resizeMode="contain"
                 />
               </TouchableOpacity>
             </Animated.View>
@@ -643,7 +695,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginTop: 12,
+    marginTop: 16,
+    marginBottom: 4,
     gap: 10,
   },
   talkCaption: {
@@ -652,17 +705,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     fontStyle: 'italic',
   },
-  micButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3F312C',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
+  micImage: {
+    width: 96,
+    height: 96,
   },
   // Voice status card
   voiceCard: {
