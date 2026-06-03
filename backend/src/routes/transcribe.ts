@@ -6,16 +6,39 @@ import type { App } from '../index.js';
 function isRateLimitError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as any;
-  if (e.statusCode === 429) return true;
-  if (e.status === 429) return true;
+  if (e.statusCode === 429 || e.status === 429) return true;
   if (e.name === 'GatewayRateLimitError') return true;
   if (typeof e.message === 'string') {
     const msg = e.message.toLowerCase();
-    if (msg.includes('rate')) return true;
-    if (msg.includes('429')) return true;
-    if (msg.includes('too many requests')) return true;
+    return msg.includes('rate') || msg.includes('429');
   }
   return false;
+}
+
+const REFUSAL_PREFIXES = [
+  'i cannot',
+  "i can't",
+  'i could not',
+  'i am unable',
+  'i am sorry',
+  'sorry, i',
+  'there is',
+  "there isn't",
+  'there are no',
+  'no speech',
+  'no audio',
+  'no words',
+  'no content',
+  'unable to',
+  'the audio contains',
+  'the audio has',
+  'the audio is',
+  'this audio',
+];
+
+function isRefusal(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  return REFUSAL_PREFIXES.some(prefix => lower.startsWith(prefix));
 }
 
 export function register(app: App, fastify: FastifyInstance) {
@@ -23,7 +46,7 @@ export function register(app: App, fastify: FastifyInstance) {
     '/api/transcribe',
     {
       schema: {
-        description: 'Transcribe an audio file using Google Gemini Flash',
+        description: 'Transcribe speech from an audio file using Google Gemini',
         tags: ['transcribe'],
         response: {
           200: {
@@ -69,15 +92,12 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      app.logger.info('POST /api/transcribe');
-
-      const data = await request.file({ limits: { fileSize: 25 * 1024 * 1024 } });
+      const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
 
       if (!data) {
         app.logger.warn('Audio file is required');
         return reply.status(400).send({
-          error: 'audio_empty',
-          message: "I didn't catch any words. Try once more, or type it in.",
+          error: 'audio is required',
         });
       }
 
@@ -105,20 +125,21 @@ export function register(app: App, fastify: FastifyInstance) {
       const startTime = Date.now();
 
       app.logger.info(
-        { fileSize, mimeType },
-        'Transcribing audio with Gemini Flash',
+        { bytes: fileSize, mimeType },
+        'transcribe_start',
       );
 
-      // Convert audio buffer to base64 data URL for Gemini
+      // Convert audio buffer to base64
       const base64Audio = buffer.toString('base64');
 
-      // Retry logic for rate limits with exponential backoff
+      // Retry logic for rate limits
       let lastError: unknown;
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const { text } = await generateText({
             model: gateway('google/gemini-2.0-flash'),
-            system: 'Output ONLY the transcribed words, nothing else. If there is no speech or the audio is silent, output an empty string and nothing else. Do not explain, do not apologize, do not add any commentary.',
+            system:
+              'Transcribe the speech in this audio. Output ONLY the transcribed words exactly as spoken — no commentary, no formatting, no quotation marks, no introductory phrases. If the audio contains no speech (silence, noise, music with no words), output an empty string and nothing else.',
             messages: [
               {
                 role: 'user',
@@ -133,32 +154,20 @@ export function register(app: App, fastify: FastifyInstance) {
             ],
           });
 
-          // Guard against model refusals
-          const REFUSAL_PREFIXES = [
-            'i cannot',
-            "i'm unable",
-            'i am unable',
-            'sorry',
-            'there is no audio',
-            'there is no speech',
-            'no speech',
-            "i don't",
-            'i do not',
-            'the audio',
-            'this audio',
-            'it appears',
-            'it seems',
-            'unfortunately',
-          ];
-          const lower = text.trim().toLowerCase();
-          const isRefusal = REFUSAL_PREFIXES.some(p => lower.startsWith(p));
-          const finalText = isRefusal ? '' : text.trim();
-
+          const rawLength = text.length;
+          const suppressedAsRefusal = isRefusal(text);
+          const finalText = suppressedAsRefusal ? '' : text.trim();
           const elapsedMs = Date.now() - startTime;
 
           app.logger.info(
-            { elapsedMs, textLength: finalText.length, fileSize, mimeType, attempts: attempt + 1 },
-            'Successfully transcribed audio',
+            {
+              bytes: fileSize,
+              raw_text_length: rawLength,
+              final_text_length: finalText.length,
+              duration_ms: elapsedMs,
+              suppressed_as_refusal: suppressedAsRefusal,
+            },
+            'transcribe_ok',
           );
 
           return reply.status(200).send({ text: finalText });
@@ -167,19 +176,18 @@ export function register(app: App, fastify: FastifyInstance) {
 
           if (isRateLimitError(error)) {
             if (attempt < 4) {
-              // Wait before retrying with longer delays: 2s, 4s, 6s, 8s
-              const delayMs = (attempt + 1) * 2000;
+              // Exponential backoff: 3s, 6s, 12s, 24s
+              const delayMs = Math.pow(3, attempt + 1) * 1000;
               app.logger.warn(
-                { attempt: attempt + 1, delayMs, err: error },
-                'Rate limited during transcription, retrying',
+                { attempt: attempt + 1, delayMs_ms: delayMs },
+                'rate_limited',
               );
               await new Promise(resolve => setTimeout(resolve, delayMs));
               continue;
             } else {
-              // Out of retries
               app.logger.warn(
-                { attempts: attempt + 1, err: error, fileSize },
-                'Rate limit exceeded after retries',
+                { attempts: attempt + 1 },
+                'rate_limited',
               );
               return reply.status(429).send({
                 error: 'rate_limited',
@@ -188,27 +196,14 @@ export function register(app: App, fastify: FastifyInstance) {
             }
           }
 
-          // Not a rate limit error, fail immediately
+          // Non-rate-limit error, fail immediately
           break;
         }
       }
 
-      // Check if it's an invalid audio format error
-      const errMsg = (lastError as any)?.message?.toLowerCase?.() || '';
-      if (errMsg.includes('invalid') || (errMsg.includes('audio') && errMsg.includes('format'))) {
-        app.logger.warn(
-          { err: lastError, fileSize, mimeType },
-          'Invalid audio format or file',
-        );
-        return reply.status(400).send({
-          error: 'audio_invalid',
-          message: "I didn't catch any words. Try once more, or type it in.",
-        });
-      }
-
       app.logger.error(
-        { err: lastError, fileSize, mimeType },
-        'Failed to transcribe audio',
+        { err: lastError, bytes: fileSize, mimeType },
+        'transcribe_failed',
       );
       return reply.status(500).send({
         error: 'server_error',
