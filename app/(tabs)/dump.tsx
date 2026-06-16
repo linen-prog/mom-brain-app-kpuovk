@@ -417,7 +417,7 @@ export default function DumpScreen() {
   // Voice status card copy
   const voiceCardCopy = (() => {
     if (voiceState === 'recording') return 'Listening… say it messy.';
-    if (voiceState === 'transcribing') return 'Turning your words into text…';
+    if (voiceState === 'transcribing') return 'Got it. Turning your words into something you can see.';
     if (voiceState === 'permission_needed')
       return 'I need microphone permission before I can listen. Tap the mic again to try, or open Settings.';
     return null;
@@ -454,7 +454,7 @@ export default function DumpScreen() {
             style={styles.textInput}
             multiline
             numberOfLines={8}
-            placeholder="Dump everything you're holding in your head…"
+            placeholder="Say everything. The big stuff, the small stuff, the thing you keep forgetting. It's all welcome here."
             placeholderTextColor={Colors.textMuted}
             value={text}
             onChangeText={setText}
@@ -571,6 +571,7 @@ export default function DumpScreen() {
           <Animated.View style={[styles.results, { opacity: resultsOpacity }]}>
             <Text style={styles.resultsHeading}>I caught it. Here's what you were holding.</Text>
             <Text style={styles.resultsSubtitle}>You don't have to hold this all in your head.</Text>
+            <Text style={styles.resultsSubtitleMuted}>Take a breath. It's all here now.</Text>
 
             {result.momCheckIn ? (
               <MomCheckInCard message={result.momCheckIn} />
@@ -635,6 +636,7 @@ export default function DumpScreen() {
             {result.holdingForLater.length > 0 && (
               <View>
                 <Text style={styles.holdingIntro}>These can wait. They're safe here.</Text>
+                <Text style={styles.holdingIntroMuted}>Parking something is not giving up on it.</Text>
                 <CategorySection
                   title="Holding for Later"
                   items={result.holdingForLater}
@@ -830,5 +832,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     fontStyle: 'italic',
     marginBottom: 6,
+  },
+  holdingIntroMuted: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  resultsSubtitleMuted: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
 });

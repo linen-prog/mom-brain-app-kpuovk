@@ -56,12 +56,12 @@ export default function FamilyScreen() {
       <View style={[styles.flex, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.title}>Family</Text>
-          <Text style={styles.subtitle}>Everything you're carrying, sorted.</Text>
+          <Text style={styles.subtitle}>What you're holding for everyone else.</Text>
         </View>
         <EmptyState
           icon={<Home size={32} color={Colors.primaryBlush} />}
           headline="Nothing sorted yet"
-          body="Head to Dump and let it all out. I'll organize everything for you."
+          body="When you do a brain dump, I'll sort everything by who and what needs attention."
           ctaLabel="Go to Dump"
           onCta={handleGoDump}
         />
@@ -87,7 +87,7 @@ export default function FamilyScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.title}>Family</Text>
-      <Text style={styles.subtitle}>Everything you're carrying, sorted.</Text>
+      <Text style={styles.subtitle}>What you're holding for everyone else.</Text>
 
       {mainSections.map((section, index) => (
         <FadeInSection key={section.key} delay={index * 60}>

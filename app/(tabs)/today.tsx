@@ -14,6 +14,14 @@ import { Colors, CategoryColors } from '@/constants/Colors';
 import { getLatestDump, updateCompleted, OrganizedDump } from '@/utils/storage';
 import { RoundedCheckbox } from '@/components/RoundedCheckbox';
 import { EmptyState } from '@/components/EmptyState';
+import { Toast } from '@/components/Toast';
+
+const DONE_PHRASES = [
+  "Done. One less thing.",
+  "Off the list.",
+  "That one's handled.",
+  "You did that.",
+];
 
 function ChecklistItem({
   item,
@@ -66,6 +74,7 @@ export default function TodayScreen() {
   const router = useRouter();
   const [dump, setDump] = useState<OrganizedDump | null>(null);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -87,7 +96,14 @@ export default function TodayScreen() {
       const key = `doToday:${index}`;
       const newValue = !completed[key];
       console.log('[Today] checkbox toggled —', key, '=', newValue);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (newValue) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const phrase = DONE_PHRASES[index % DONE_PHRASES.length];
+        console.log('[Today] item checked — showing toast:', phrase);
+        setToastMessage(phrase);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
       setCompleted((prev) => ({ ...prev, [key]: newValue }));
       await updateCompleted(key, newValue);
     },
@@ -112,7 +128,7 @@ export default function TodayScreen() {
         <EmptyState
           icon={<Sun size={32} color={Colors.primaryBlush} />}
           headline="Nothing here yet"
-          body="Head to Dump and let it all out. I'll find what matters today."
+          body="When you're ready, head to Dump and say what's on your mind. I'll find what matters today."
           ctaLabel="Go to Dump"
           onCta={handleGoDump}
         />
@@ -122,71 +138,87 @@ export default function TodayScreen() {
 
   const doneCount = dump.doToday.filter((_, i) => completed[`doToday:${i}`]).length;
   const totalCount = dump.doToday.length;
+  const allDone = doneCount === totalCount && totalCount > 0;
   const thisWeekVisible = dump.thisWeek.slice(0, 3);
   const thisWeekExtra = dump.thisWeek.length - 3;
 
+  const progressText = allDone ? "All done. You can rest now." : `${doneCount} of ${totalCount} done`;
+
+  const encourageTitle = (() => {
+    if (allDone) return "You did it.";
+    if (doneCount >= 2) return "You're moving.";
+    if (doneCount === 1) return "One thing done.";
+    return "Start with one visible win.";
+  })();
+
+  const encourageBody = (() => {
+    if (allDone) return "All of it. Rest is next.";
+    if (doneCount >= 2) return "That counts.";
+    if (doneCount === 1) return "That's real.";
+    return "You're not behind. You're carrying a lot.";
+  })();
+
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <Text style={styles.title}>Today's Flow</Text>
-      <Text style={styles.subtitle}>The next right things, not everything.</Text>
+    <View style={styles.flex}>
+      <Toast message={toastMessage} />
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <Text style={styles.title}>Today's Flow</Text>
+        <Text style={styles.subtitle}>The next right things, not everything.</Text>
 
-      {/* Progress hint */}
-      <Text style={styles.progressHint}>
-        {doneCount}
-        {' of '}
-        {totalCount}
-        {' done'}
-      </Text>
+        {/* Progress hint */}
+        <Text style={styles.progressHint}>{progressText}</Text>
 
-      {/* Encouragement card */}
-      <View style={styles.encourageCard}>
-        <View style={styles.encourageBorder} />
-        <Text style={styles.encourageText}>Start with one visible win.</Text>
-        <Text style={styles.encourageBody}>You're not behind. You're carrying a lot.</Text>
-      </View>
-
-      {/* Checklist */}
-      <View style={styles.checklist}>
-        {dump.doToday.map((item, index) => (
-          <ChecklistItem
-            key={index}
-            item={item}
-            index={index}
-            checked={!!completed[`doToday:${index}`]}
-            onToggle={() => handleToggle(index)}
-          />
-        ))}
-      </View>
-
-      {/* This week preview — quiet secondary treatment */}
-      {dump.thisWeek.length > 0 && (
-        <View style={styles.thisWeekSection}>
-          <View style={styles.thisWeekDivider} />
-          <Text style={styles.thisWeekLabel}>LATER THIS WEEK</Text>
-          {thisWeekVisible.map((item, i) => (
-            <View key={i} style={styles.thisWeekRow}>
-              <View style={[styles.thisWeekDot, { backgroundColor: CategoryColors.thisWeek }]} />
-              <Text style={styles.thisWeekItem}>{item}</Text>
-            </View>
-          ))}
-          {thisWeekExtra > 0 && (
-            <Text style={styles.thisWeekMore}>
-              {'+ '}
-              {thisWeekExtra}
-              {' more'}
-            </Text>
-          )}
+        {/* Encouragement card */}
+        <View style={styles.encourageCard}>
+          <View style={styles.encourageBorder} />
+          <Text style={styles.encourageText}>{encourageTitle}</Text>
+          <Text style={styles.encourageBody}>{encourageBody}</Text>
         </View>
-      )}
-    </ScrollView>
+
+        {/* Checklist */}
+        <View style={styles.checklist}>
+          {dump.doToday.map((item, index) => (
+            <ChecklistItem
+              key={index}
+              item={item}
+              index={index}
+              checked={!!completed[`doToday:${index}`]}
+              onToggle={() => handleToggle(index)}
+            />
+          ))}
+        </View>
+
+        {/* This week preview — quiet secondary treatment */}
+        {dump.thisWeek.length > 0 && (
+          <View style={styles.thisWeekSection}>
+            <View style={styles.thisWeekDivider} />
+            <Text style={styles.thisWeekPermission}>These are waiting. They don't need you today.</Text>
+            <Text style={styles.thisWeekLabel}>LATER THIS WEEK</Text>
+            {thisWeekVisible.map((item, i) => (
+              <View key={i} style={styles.thisWeekRow}>
+                <View style={[styles.thisWeekDot, { backgroundColor: CategoryColors.thisWeek }]} />
+                <Text style={styles.thisWeekItem}>{item}</Text>
+              </View>
+            ))}
+            {thisWeekExtra > 0 && (
+              <Text style={styles.thisWeekMore}>
+                {'+ '}
+                {thisWeekExtra}
+                {' more'}
+              </Text>
+            )}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -289,6 +321,12 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
     marginBottom: 4,
+  },
+  thisWeekPermission: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    fontStyle: 'italic',
   },
   thisWeekLabel: {
     fontSize: 11,
