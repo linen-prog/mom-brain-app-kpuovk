@@ -32,10 +32,7 @@ yarn-error.*
 android/
 ios/
 
-pnpm-lock.yaml
 package-lock.json
-bun.lock
-bun.lockb
 yarn.lock
 # Python
 .venv/
