@@ -4,13 +4,12 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Colors } from '@/constants/Colors';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const TABS = [
-  { name: 'dump', label: 'Dump', icon: 'auto-awesome' as const, route: '/(tabs)/dump' },
-  { name: 'today', label: 'Today', icon: 'wb-sunny' as const, route: '/(tabs)/today' },
-  { name: 'profile', label: 'Profile', icon: 'person' as const, route: '/(tabs)/profile' },
-  { name: 'rhythm', label: 'Rhythm', icon: 'repeat' as const, route: '/(tabs)/rhythm' },
+  { name: 'dump', label: 'Dump', icon: '✦' },
+  { name: 'today', label: 'Today', icon: '☀' },
+  { name: 'profile', label: 'Profile', icon: '◎' },
+  { name: 'rhythm', label: 'Rhythm', icon: '∿' },
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,11 +41,12 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any; desc
                 onPress={onPress}
                 activeOpacity={0.7}
               >
-                <MaterialIcons
-                  name={tab.icon}
-                  size={22}
-                  color={isFocused ? Colors.primaryBlush : Colors.textMuted}
-                />
+                <Text style={[
+                  styles.tabIcon,
+                  { color: isFocused ? Colors.primaryDeepRose : Colors.textMuted },
+                ]}>
+                  {tab.icon}
+                </Text>
                 <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
                   {tab.label}
                 </Text>
@@ -99,6 +99,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
     paddingVertical: 4,
+  },
+  tabIcon: {
+    fontSize: 20,
+    lineHeight: 24,
+    textAlign: 'center',
   },
   tabLabel: {
     fontSize: 10,

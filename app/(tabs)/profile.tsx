@@ -14,12 +14,10 @@ import * as StoreReview from 'expo-store-review';
 import Constants from 'expo-constants';
 import { Colors } from '@/constants/Colors';
 import { clearAllData } from '@/utils/storage';
-import { IconSymbol } from '@/components/IconSymbol';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProfileRowProps {
-  icon: string;
   label: string;
   onPress: () => void;
   labelColor?: string;
@@ -29,17 +27,14 @@ interface ProfileRowProps {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SectionCard({ title, iconName, children }: {
+function SectionCard({ title, children }: {
   title: string;
-  iconName: string;
   children: React.ReactNode;
 }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <View style={styles.cardIconCircle}>
-          <IconSymbol name={iconName} size={18} color={Colors.primaryDeepRose} />
-        </View>
+        <View style={styles.sectionDot} />
         <Text style={styles.cardTitle}>{title}</Text>
       </View>
       {children}
@@ -47,24 +42,19 @@ function SectionCard({ title, iconName, children }: {
   );
 }
 
-function ProfileRow({ icon, label, onPress, labelColor, rightText, showChevron = true }: ProfileRowProps) {
+function ProfileRow({ label, onPress, labelColor, rightText, showChevron = true }: ProfileRowProps) {
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPress}
     >
-      <View style={styles.rowLeft}>
-        <View style={styles.rowIconWrap}>
-          <IconSymbol name={icon} size={16} color={Colors.primaryDeepRose} />
-        </View>
-        <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : undefined]}>
-          {label}
-        </Text>
-      </View>
+      <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : undefined]}>
+        {label}
+      </Text>
       <View style={styles.rowRight}>
         {rightText ? <Text style={styles.rowRightText}>{rightText}</Text> : null}
         {showChevron && (
-          <IconSymbol name="chevron.right" size={14} color={Colors.textMuted} />
+          <Text style={styles.chevron}>›</Text>
         )}
       </View>
     </Pressable>
@@ -248,13 +238,13 @@ export default function ProfileScreen() {
         <Text style={styles.subtitle}>Your account, support, and settings.</Text>
 
         {/* Account card */}
-        <SectionCard title="Account" iconName="person.circle.fill">
+        <SectionCard title="Account">
           {isSignedIn && userEmail ? (
             <View style={styles.accountSignedIn}>
               <View style={styles.accountEmailRow}>
                 <Text style={styles.accountEmail}>{userEmail}</Text>
                 <View style={styles.signedInBadge}>
-                  <IconSymbol name="checkmark.circle.fill" size={14} color={Colors.sage} />
+                  <Text style={{ fontSize: 14, color: Colors.sage }}>✓</Text>
                   <Text style={styles.signedInText}>Signed in</Text>
                 </View>
               </View>
@@ -265,7 +255,6 @@ export default function ProfileScreen() {
                 style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.8 }]}
                 onPress={handleSignOut}
               >
-                <IconSymbol name="rectangle.portrait.and.arrow.right" size={15} color="#FFFFFF" />
                 <Text style={styles.signOutButtonText}>Sign Out</Text>
               </Pressable>
             </View>
@@ -281,7 +270,6 @@ export default function ProfileScreen() {
                 style={({ pressed }) => [styles.signInButton, pressed && { opacity: 0.8 }]}
                 onPress={handleSignIn}
               >
-                <IconSymbol name="person.badge.plus" size={15} color={Colors.primaryDeepRose} />
                 <Text style={styles.signInButtonText}>Sign In</Text>
               </Pressable>
             </View>
@@ -289,24 +277,23 @@ export default function ProfileScreen() {
         </SectionCard>
 
         {/* Support card */}
-        <SectionCard title="Support" iconName="heart.circle.fill">
-          <ProfileRow icon="star" label="Rate This App" onPress={handleRateApp} />
+        <SectionCard title="Support">
+          <ProfileRow label="Rate This App" onPress={handleRateApp} />
           <RowDivider />
-          <ProfileRow icon="bubble.left" label="Report a Problem" onPress={handleReportProblem} />
+          <ProfileRow label="Report a Problem" onPress={handleReportProblem} />
           <RowDivider />
-          <ProfileRow icon="lightbulb" label="Suggest a Feature" onPress={handleSuggestFeature} />
+          <ProfileRow label="Suggest a Feature" onPress={handleSuggestFeature} />
         </SectionCard>
 
         {/* Data & Privacy card */}
-        <SectionCard title="Data & Privacy" iconName="lock.shield.fill">
-          <ProfileRow icon="lock" label="Privacy Policy" onPress={handlePrivacyPolicy} />
+        <SectionCard title="Data & Privacy">
+          <ProfileRow label="Privacy Policy" onPress={handlePrivacyPolicy} />
           <RowDivider />
-          <ProfileRow icon="doc.text" label="Terms of Use" onPress={handleTermsOfUse} />
+          <ProfileRow label="Terms of Use" onPress={handleTermsOfUse} />
           <RowDivider />
-          <ProfileRow icon="trash" label="Clear Saved Brain Dumps" onPress={handleClearDumps} />
+          <ProfileRow label="Clear Saved Brain Dumps" onPress={handleClearDumps} />
           <RowDivider />
           <ProfileRow
-            icon="exclamationmark.triangle"
             label="Delete Account"
             onPress={handleDeleteAccount}
             labelColor={Colors.primaryDeepRose}
@@ -314,18 +301,17 @@ export default function ProfileScreen() {
         </SectionCard>
 
         {/* About card */}
-        <SectionCard title="About" iconName="info.circle.fill">
-          <ProfileRow icon="questionmark.circle" label="How Mom Brain Works" onPress={handleHowItWorks} />
+        <SectionCard title="About">
+          <ProfileRow label="How Mom Brain Works" onPress={handleHowItWorks} />
           <RowDivider />
           <ProfileRow
-            icon="tag"
             label="App Version"
             onPress={() => {}}
             rightText={appVersion}
             showChevron={false}
           />
           <RowDivider />
-          <ProfileRow icon="envelope" label="Contact Support" onPress={handleContactSupport} />
+          <ProfileRow label="Contact Support" onPress={handleContactSupport} />
         </SectionCard>
       </ScrollView>
 
@@ -396,16 +382,14 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     marginBottom: 16,
   },
-  cardIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.primaryBlush + '28',
-    alignItems: 'center',
-    justifyContent: 'center',
+  sectionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primaryDeepRose,
   },
   cardTitle: {
     fontSize: 20,
@@ -421,20 +405,6 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     opacity: 0.65,
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  rowIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: Colors.primaryBlush + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   rowLabel: {
     fontSize: 16,
@@ -455,7 +425,13 @@ const styles = StyleSheet.create({
   rowDivider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginLeft: 42,
+    marginLeft: 0,
+  },
+  chevron: {
+    fontSize: 20,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    lineHeight: 22,
   },
   // Account section
   accountSignedIn: {
