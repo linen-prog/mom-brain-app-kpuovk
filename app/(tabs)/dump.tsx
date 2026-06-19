@@ -489,7 +489,6 @@ export default function DumpScreen() {
   })();
 
   return (
-    <View style={styles.flex} pointerEvents="box-none">
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -499,7 +498,7 @@ export default function DumpScreen() {
         style={styles.flex}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 80 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -730,7 +729,6 @@ export default function DumpScreen() {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
-    </View>
   );
 }
 

@@ -223,6 +223,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     alignSelf: 'center',
     // width and marginBottom handled dynamically via props
+    pointerEvents: 'box-none', // prevent touch blocking if rendered
   },
   blurContainer: {
     overflow: 'hidden',
