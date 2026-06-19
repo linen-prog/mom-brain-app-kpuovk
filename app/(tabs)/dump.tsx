@@ -451,7 +451,7 @@ export default function DumpScreen() {
     if (isPermissionNeeded) {
       return <IconSymbol name="mic.slash.fill" size={28} color="#FFFFFF" />;
     }
-    return <IconSymbol name="mic.fill" size={28} color="#FFFFFF" />;
+    return <View style={styles.playTriangle} />;
   })();
 
   // ── Mic button with optional rings ──────────────────────────────────────
@@ -838,6 +838,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     color: Colors.textMuted,
     marginTop: 1,
+  },
+  playTriangle: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 11,
+    borderBottomWidth: 11,
+    borderLeftWidth: 18,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: '#FFFFFF',
+    marginLeft: 4,
   },
   micButton: {
     width: 64,
