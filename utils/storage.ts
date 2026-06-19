@@ -76,3 +76,32 @@ export async function addItemToCategory(
     return null;
   }
 }
+
+const HISTORY_KEY = 'mombrain.dumpHistory';
+
+export async function clearLatestDump(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(DUMP_KEY);
+    console.log('[Storage] clearLatestDump — cleared');
+  } catch (err) {
+    console.error('[Storage] clearLatestDump error:', err);
+  }
+}
+
+export async function clearDumpHistory(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(HISTORY_KEY);
+    console.log('[Storage] clearDumpHistory — cleared');
+  } catch (err) {
+    console.error('[Storage] clearDumpHistory error:', err);
+  }
+}
+
+export async function clearAllData(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([DUMP_KEY, HISTORY_KEY]);
+    console.log('[Storage] clearAllData — cleared both keys');
+  } catch (err) {
+    console.error('[Storage] clearAllData error:', err);
+  }
+}

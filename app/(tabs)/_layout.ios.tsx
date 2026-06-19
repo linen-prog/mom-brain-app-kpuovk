@@ -9,7 +9,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 const TABS = [
   { name: 'dump', label: 'Dump', icon: 'auto-awesome' as const },
   { name: 'today', label: 'Today', icon: 'wb-sunny' as const },
-  { name: 'family', label: 'Family', icon: 'home' as const },
+  { name: 'profile', label: 'Profile', icon: 'person' as const },
   { name: 'rhythm', label: 'Rhythm', icon: 'repeat' as const },
 ];
 
@@ -68,7 +68,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="dump" />
       <Tabs.Screen name="today" />
-      <Tabs.Screen name="family" />
+      <Tabs.Screen name="profile" />
       <Tabs.Screen name="rhythm" />
     </Tabs>
   );
