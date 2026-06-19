@@ -217,6 +217,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1000,
     alignItems: 'center', // Center the content
+    pointerEvents: 'box-none',
   },
   container: {
     marginHorizontal: 20,

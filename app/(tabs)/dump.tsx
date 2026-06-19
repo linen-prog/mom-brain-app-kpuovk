@@ -489,6 +489,7 @@ export default function DumpScreen() {
   })();
 
   return (
+    <View style={styles.flex} pointerEvents="box-none">
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -729,6 +730,7 @@ export default function DumpScreen() {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
