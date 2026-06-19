@@ -272,6 +272,7 @@ export default function DumpScreen() {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
         originalText: text.trim(),
+        work: [],
         ...normalized,
         completed: {},
       };

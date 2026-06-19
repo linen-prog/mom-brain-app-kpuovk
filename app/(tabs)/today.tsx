@@ -6,13 +6,18 @@ import {
   StyleSheet,
   Animated,
   Pressable,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Sun, Check } from 'lucide-react-native';
 import { Colors, CategoryColors } from '@/constants/Colors';
-import { getLatestDump, updateCompleted, OrganizedDump } from '@/utils/storage';
+import { getLatestDump, updateCompleted, addItemToCategory, OrganizedDump } from '@/utils/storage';
 import { EmptyState } from '@/components/EmptyState';
 import { Toast } from '@/components/Toast';
 
@@ -73,6 +78,18 @@ export default function TodayScreen() {
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Add task modal
+  const [addTaskModal, setAddTaskModal] = useState<{ category: 'doToday' | 'thisWeek' } | null>(null);
+  const [addTaskText, setAddTaskText] = useState('');
+  const [addTaskLoading, setAddTaskLoading] = useState(false);
+
+  // Category detail modal
+  const [categoryModal, setCategoryModal] = useState<{
+    key: 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work';
+    label: string;
+    color: string;
+  } | null>(null);
+
   useFocusEffect(
     useCallback(() => {
       console.log('[Today] screen focused — loading latest dump');
@@ -106,6 +123,55 @@ export default function TodayScreen() {
     },
     [completed]
   );
+
+  const handleToggleThisWeek = useCallback(
+    async (index: number) => {
+      const key = `thisWeek:${index}`;
+      const newValue = !completed[key];
+      console.log('[Today] thisWeek checkbox toggled —', key, '=', newValue);
+      if (newValue) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setToastMessage(DONE_PHRASES[index % DONE_PHRASES.length]);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setCompleted((prev) => ({ ...prev, [key]: newValue }));
+      await updateCompleted(key, newValue);
+    },
+    [completed]
+  );
+
+  const handleToggleCategory = useCallback(
+    async (catKey: string, index: number) => {
+      const key = `${catKey}:${index}`;
+      const newValue = !completed[key];
+      console.log('[Today] category checkbox toggled —', key, '=', newValue);
+      if (newValue) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setToastMessage(DONE_PHRASES[index % DONE_PHRASES.length]);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setCompleted((prev) => ({ ...prev, [key]: newValue }));
+      await updateCompleted(key, newValue);
+    },
+    [completed]
+  );
+
+  const handleAddTask = useCallback(async () => {
+    if (!addTaskModal || !addTaskText.trim()) return;
+    console.log('[Today] add task pressed — category:', addTaskModal.category, 'text:', addTaskText.trim());
+    setAddTaskLoading(true);
+    const updated = await addItemToCategory(addTaskModal.category, addTaskText.trim());
+    if (updated) {
+      setDump(updated);
+      setCompleted(updated.completed ?? {});
+    }
+    setAddTaskText('');
+    setAddTaskModal(null);
+    setAddTaskLoading(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [addTaskModal, addTaskText]);
 
   const handleGoDump = useCallback(() => {
     console.log('[Today] "Go to Dump" pressed');
@@ -157,17 +223,20 @@ export default function TodayScreen() {
   })();
 
   const cats = [
-    { key: 'kids', label: 'Kids', items: dump.kids, color: CategoryColors.kids },
-    { key: 'home', label: 'Home', items: dump.home, color: CategoryColors.home },
-    { key: 'errands', label: 'Errands', items: dump.errands, color: CategoryColors.errands },
-    { key: 'meals', label: 'Meals', items: dump.meals, color: CategoryColors.meals },
-    { key: 'messages', label: 'Messages', items: dump.messages, color: CategoryColors.messages },
+    { key: 'kids' as const, label: 'Kids', items: dump.kids ?? [], color: CategoryColors.kids },
+    { key: 'home' as const, label: 'Home', items: dump.home ?? [], color: CategoryColors.home },
+    { key: 'errands' as const, label: 'Errands', items: dump.errands ?? [], color: CategoryColors.errands },
+    { key: 'meals' as const, label: 'Meals', items: dump.meals ?? [], color: CategoryColors.meals },
+    { key: 'messages' as const, label: 'Messages', items: dump.messages ?? [], color: CategoryColors.messages },
+    { key: 'work' as const, label: 'Work', items: dump.work ?? [], color: Colors.lavender },
   ].filter(c => c.items.length > 0);
 
   const catRows: typeof cats[] = [];
   for (let i = 0; i < cats.length; i += 2) {
     catRows.push(cats.slice(i, i + 2));
   }
+
+  const addTaskCategoryLabel = addTaskModal?.category === 'doToday' ? 'Do Today' : 'This Week';
 
   return (
     <View style={styles.flex}>
@@ -232,9 +301,16 @@ export default function TodayScreen() {
             </View>
           ))}
 
-          <View style={styles.addTaskRow}>
+          <Pressable
+            style={({ pressed }) => [styles.addTaskRow, pressed && { opacity: 0.7 }]}
+            onPress={() => {
+              console.log('[Today] "+ Add a task" pressed — category: doToday');
+              setAddTaskText('');
+              setAddTaskModal({ category: 'doToday' });
+            }}
+          >
             <Text style={styles.addTaskText}>+ Add a task</Text>
-          </View>
+          </Pressable>
         </View>
 
         {/* This Week card */}
@@ -256,15 +332,27 @@ export default function TodayScreen() {
                 <View key={index}>
                   {index > 0 && <View style={styles.rowDivider} />}
                   <View style={styles.taskRow}>
-                    <View style={[circleStyles.circle, { opacity: 0.4 }]} />
-                    <Text style={styles.taskText}>{item}</Text>
+                    <CircleCheckbox
+                      checked={!!completed[`thisWeek:${index}`]}
+                      onToggle={() => handleToggleThisWeek(index)}
+                    />
+                    <Text style={[styles.taskText, completed[`thisWeek:${index}`] && styles.taskTextDone]}>
+                      {item}
+                    </Text>
                   </View>
                 </View>
               ))}
 
-              <View style={styles.addTaskRow}>
+              <Pressable
+                style={({ pressed }) => [styles.addTaskRow, pressed && { opacity: 0.7 }]}
+                onPress={() => {
+                  console.log('[Today] "+ Add a task" pressed — category: thisWeek');
+                  setAddTaskText('');
+                  setAddTaskModal({ category: 'thisWeek' });
+                }}
+              >
                 <Text style={styles.addTaskText}>+ Add a task</Text>
-              </View>
+              </Pressable>
             </View>
           </>
         )}
@@ -277,7 +365,14 @@ export default function TodayScreen() {
                 {row.map(cat => {
                   const previewText = cat.items.slice(0, 2).join(', ');
                   return (
-                    <View key={cat.key} style={styles.categoryMiniCard}>
+                    <Pressable
+                      key={cat.key}
+                      style={({ pressed }) => [styles.categoryMiniCard, pressed && { opacity: 0.85 }]}
+                      onPress={() => {
+                        console.log('[Today] category card pressed —', cat.key);
+                        setCategoryModal({ key: cat.key, label: cat.label, color: cat.color });
+                      }}
+                    >
                       <View style={styles.categoryMiniHeader}>
                         <View style={[styles.categoryMiniDot, { backgroundColor: cat.color }]} />
                         <Text style={styles.categoryMiniTitle}>{cat.label}</Text>
@@ -291,7 +386,7 @@ export default function TodayScreen() {
                       <View style={styles.categoryMiniFooter}>
                         <Text style={[styles.categoryMiniChevron, { color: cat.color }]}>›</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
                 {row.length === 1 && <View style={styles.categoryMiniCardEmpty} />}
@@ -300,6 +395,112 @@ export default function TodayScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Add Task Modal */}
+      <Modal
+        visible={addTaskModal !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddTaskModal(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setAddTaskModal(null)} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>
+              Add to {addTaskCategoryLabel}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="What do you need to do?"
+              placeholderTextColor={Colors.textMuted}
+              value={addTaskText}
+              onChangeText={setAddTaskText}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleAddTask}
+              multiline={false}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => {
+                  console.log('[Today] add task modal — cancel pressed');
+                  setAddTaskModal(null);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm, (!addTaskText.trim() || addTaskLoading) && styles.modalConfirmDisabled]}
+                onPress={handleAddTask}
+                disabled={!addTaskText.trim() || addTaskLoading}
+              >
+                <Text style={styles.modalConfirmText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Category Detail Modal */}
+      {categoryModal && dump && (
+        <Modal
+          visible={categoryModal !== null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setCategoryModal(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable style={styles.modalBackdrop} onPress={() => setCategoryModal(null)} />
+            <View style={[styles.modalSheet, styles.categoryModalSheet]}>
+              <View style={styles.modalHandle} />
+              {/* Header */}
+              <View style={styles.categoryModalHeader}>
+                <View style={[styles.categoryMiniDot, { backgroundColor: categoryModal.color, width: 14, height: 14, borderRadius: 7 }]} />
+                <Text style={styles.categoryModalTitle}>{categoryModal.label}</Text>
+                <Pressable
+                  onPress={() => {
+                    console.log('[Today] category modal closed —', categoryModal.label);
+                    setCategoryModal(null);
+                  }}
+                  style={styles.categoryModalClose}
+                >
+                  <Text style={styles.categoryModalCloseText}>✕</Text>
+                </Pressable>
+              </View>
+              {/* Items */}
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.categoryModalScroll}>
+                {((dump[categoryModal.key as keyof OrganizedDump] as string[]) ?? []).length === 0 ? (
+                  <Text style={styles.categoryModalEmpty}>Nothing here yet.</Text>
+                ) : (
+                  ((dump[categoryModal.key as keyof OrganizedDump] as string[]) ?? []).map((item: string, index: number) => {
+                    const key = `${categoryModal.key}:${index}`;
+                    const isChecked = !!completed[key];
+                    return (
+                      <View key={index}>
+                        {index > 0 && <View style={styles.rowDivider} />}
+                        <View style={styles.taskRow}>
+                          <CircleCheckbox
+                            checked={isChecked}
+                            onToggle={() => handleToggleCategory(categoryModal.key, index)}
+                          />
+                          <Text style={[styles.taskText, isChecked && styles.taskTextDone]}>
+                            {item}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -551,5 +752,114 @@ const styles = StyleSheet.create({
   categoryMiniChevron: {
     fontSize: 20,
     fontFamily: 'Nunito_700Bold',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(63, 49, 44, 0.35)',
+  },
+  modalSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  categoryModalSheet: {
+    maxHeight: '75%',
+    paddingBottom: 32,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+  },
+  modalInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    fontSize: 16,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMain,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  modalCancel: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textBody,
+  },
+  modalConfirm: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: Colors.primaryDeepRose,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalConfirmDisabled: {
+    opacity: 0.45,
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_700Bold',
+    color: '#FFFFFF',
+  },
+  // Category modal
+  categoryModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  categoryModalTitle: {
+    fontSize: 22,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+    flex: 1,
+  },
+  categoryModalClose: {
+    padding: 4,
+  },
+  categoryModalCloseText: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+  },
+  categoryModalEmpty: {
+    fontSize: 15,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    paddingVertical: 20,
+    textAlign: 'center',
+  },
+  categoryModalScroll: {
+    flexGrow: 0,
   },
 });

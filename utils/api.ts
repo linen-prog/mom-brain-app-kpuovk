@@ -9,8 +9,11 @@ export interface OrganizeResponse {
   meals: string[];
   messages: string[];
   holdingForLater: string[];
+  work?: string[];   // optional — backend doesn't return it yet
   momCheckIn: string;
 }
+
+export type CategoryKey = 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work';
 
 export type OrganizeErrorKind = 'rate_limited' | 'server_error' | 'network';
 
