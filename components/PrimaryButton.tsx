@@ -77,9 +77,9 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: Colors.primaryBlush,
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: Colors.primaryDeepRose,
+    borderRadius: 18,
+    paddingVertical: 18,
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',

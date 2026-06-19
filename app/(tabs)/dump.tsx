@@ -11,8 +11,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
-  Image,
-  ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -31,17 +29,6 @@ import { CategorySection } from '@/components/CategorySection';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { requestMicPermission, transcribeAudio, VoiceError } from '@/utils/voice';
 import { IconSymbol } from '@/components/IconSymbol';
-
-// ─── Mic illustration assets ──────────────────────────────────────────────────
-const MIC_IDLE = require('@/assets/images/36718f89-1e02-496d-ae89-2b43ddce4a4c.jpeg');
-const MIC_RECORDING = require('@/assets/images/d37fa240-ea5b-4a98-9534-9a3b539c3b04.jpeg');
-const MIC_TRANSCRIBING = require('@/assets/images/48850389-54f0-4669-a9bb-eb1bdaa1ff0d.jpeg');
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
 
 const FALLBACK_CHECK_IN = "I caught it all. Pick one small thing — that's enough.";
 
@@ -95,6 +82,26 @@ function countAllItems(dump: OrganizedDump): number {
   );
 }
 
+// ─── Waveform bar component ───────────────────────────────────────────────────
+function WaveformBars({ barAnims }: { barAnims: Animated.Value[] }) {
+  return (
+    <View style={styles.waveformContainer}>
+      {barAnims.map((anim, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.waveformBar,
+            {
+              transform: [{ scaleY: anim }],
+              opacity: anim.interpolate({ inputRange: [0.3, 1], outputRange: [0.5, 1] }),
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DumpScreen() {
@@ -117,12 +124,16 @@ export default function DumpScreen() {
   const resultsOpacity = useRef(new Animated.Value(0)).current;
   const helperOpacity = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
   const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  const rotateLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Waveform bar animations (5 bars for transcribing state)
+  const barAnims = useRef<Animated.Value[]>(
+    Array.from({ length: 5 }, () => new Animated.Value(0.3))
+  ).current;
+  const barLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   // ── Load saved dump ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -173,27 +184,38 @@ export default function DumpScreen() {
     };
   }, [voiceState, pulseAnim]);
 
-  // ── Rotate animation for transcribing state ──────────────────────────────
+  // ── Waveform animation for transcribing state ────────────────────────────
   useEffect(() => {
     if (voiceState === 'transcribing') {
-      rotateAnim.setValue(0);
-      const loop = Animated.loop(
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 6000,
-          useNativeDriver: true,
-        })
+      barAnims.forEach((anim) => anim.setValue(0.3));
+      const animations = barAnims.map((anim, i) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(i * 110),
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0.3,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ])
+        )
       );
-      rotateLoopRef.current = loop;
-      loop.start();
+      const parallel = Animated.parallel(animations);
+      barLoopRef.current = parallel;
+      parallel.start();
     } else {
-      rotateLoopRef.current?.stop();
-      rotateAnim.setValue(0);
+      barLoopRef.current?.stop();
+      barAnims.forEach((anim) => anim.setValue(0.3));
     }
     return () => {
-      rotateLoopRef.current?.stop();
+      barLoopRef.current?.stop();
     };
-  }, [voiceState, rotateAnim]);
+  }, [voiceState, barAnims]);
 
   // ── Cleanup success timer on unmount ────────────────────────────────────
   useEffect(() => {
@@ -398,21 +420,12 @@ export default function DumpScreen() {
   // Mic button appearance
   const isRecording = voiceState === 'recording';
   const isTranscribing = voiceState === 'transcribing';
-
-  const micSource =
-    voiceState === 'transcribing' ? MIC_TRANSCRIBING :
-    voiceState === 'recording' ? MIC_RECORDING :
-    MIC_IDLE;
+  const isPermissionNeeded = voiceState === 'permission_needed';
 
   const micAccessibilityLabel =
     voiceState === 'transcribing' ? 'Transcribing' :
     voiceState === 'recording' ? 'Stop recording' :
     'Start voice dump';
-
-  const rotateInterpolation = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   // Voice status card copy
   const voiceCardCopy = (() => {
@@ -427,6 +440,51 @@ export default function DumpScreen() {
   const voiceErrorMessage = (() => {
     if (!voiceError) return null;
     return voiceError;
+  })();
+
+  // ── Mic button inner content ─────────────────────────────────────────────
+  const micButtonInner = (() => {
+    if (isTranscribing) {
+      return <WaveformBars barAnims={barAnims} />;
+    }
+    if (isPermissionNeeded) {
+      return <IconSymbol name="mic.slash.fill" size={28} color="#FFFFFF" />;
+    }
+    return <IconSymbol name="mic.fill" size={28} color="#FFFFFF" />;
+  })();
+
+  // ── Mic button with optional rings ──────────────────────────────────────
+  const micButtonNode = (() => {
+    const button = (
+      <TouchableOpacity
+        onPress={handleMicPress}
+        disabled={isTranscribing}
+        activeOpacity={0.85}
+        accessibilityLabel={micAccessibilityLabel}
+      >
+        <View style={styles.micButton}>
+          {micButtonInner}
+        </View>
+      </TouchableOpacity>
+    );
+
+    if (isRecording) {
+      return (
+        <Animated.View style={{ opacity: pulseAnim }}>
+          <View style={styles.micRingOuter}>
+            <View style={styles.micRingMid}>
+              {button}
+            </View>
+          </View>
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Animated.View style={{ opacity: pulseAnim }}>
+        {button}
+      </Animated.View>
+    );
   })();
 
   return (
@@ -445,42 +503,50 @@ export default function DumpScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={styles.appName}>Mom Brain</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.appName}>Mom Brain</Text>
+          <Text style={styles.appNameHeart}>{'♡'}</Text>
+        </View>
         <Text style={styles.tagline}>Say it messy. I'll sort it out.</Text>
 
-        {/* Input card with mic button */}
+        {/* Input card */}
         <View style={styles.inputCard}>
+          {/* Card header */}
+          <View style={styles.cardHeader}>
+            <Text style={styles.sparkleIcon}>✦</Text>
+            <Text style={styles.cardHeading}>Get it out of your head.</Text>
+          </View>
+
+          {/* Helper subtext — fades when user types */}
+          <Animated.Text style={[styles.helperSubtext, { opacity: helperOpacity }]}>
+            {'Say everything—the big stuff, the small stuff, the thing you keep forgetting. It\'s all welcome here.'}
+          </Animated.Text>
+
+          {/* Text input */}
           <TextInput
             style={styles.textInput}
             multiline
-            numberOfLines={8}
-            placeholder="Say everything. The big stuff, the small stuff, the thing you keep forgetting. It's all welcome here."
+            placeholder=""
             placeholderTextColor={Colors.textMuted}
             value={text}
             onChangeText={setText}
             textAlignVertical="top"
             editable={!loading && voiceState !== 'transcribing'}
           />
-          {/* Mic button — bottom-right of card */}
-          <View style={styles.micRow}>
-            <Text style={styles.talkCaption}>Talk it out.</Text>
-            <Animated.View style={{ opacity: pulseAnim }}>
-              <TouchableOpacity
-                onPress={handleMicPress}
-                disabled={isTranscribing}
-                activeOpacity={0.9}
-                accessibilityLabel={micAccessibilityLabel}
-              >
-                <Animated.Image
-                  source={resolveImageSource(micSource)}
-                  style={[
-                    styles.micImage,
-                    isTranscribing && { transform: [{ rotate: rotateInterpolation }] },
-                  ]}
-                  resizeMode="contain"
-                />
-              </TouchableOpacity>
-            </Animated.View>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Voice row */}
+          <View style={styles.voiceRow}>
+            <View style={styles.voiceRowLeft}>
+              <IconSymbol name="mic.fill" size={16} color={Colors.primaryDeepRose} />
+              <View>
+                <Text style={styles.voiceLabel}>Talk it out</Text>
+                <Text style={styles.voiceSubLabel}>Tap to voice your thoughts</Text>
+              </View>
+            </View>
+            {micButtonNode}
           </View>
         </View>
 
@@ -535,13 +601,20 @@ export default function DumpScreen() {
 
         {/* First-time helper card */}
         {showHelper && (
-          <Animated.View style={[styles.helperCard, { opacity: helperOpacity }]}>
-            <Text style={styles.helperLabel}>FOR EXAMPLE</Text>
-            <Text style={styles.helperText}>
-              Try something like: I need to sign Mina's school form, order groceries, text the
-              babysitter, and I think I'm forgetting something for Monday…
-            </Text>
-          </Animated.View>
+          <View style={styles.helperCard}>
+            <View style={styles.helperCardInner}>
+              <View style={styles.helperCardLeft}>
+                <View style={styles.helperLabelRow}>
+                  <Text style={styles.helperSparkle}>✦</Text>
+                  <Text style={styles.helperLabel}>FOR EXAMPLE</Text>
+                </View>
+                <Text style={styles.helperText}>
+                  Try something like: I need to sign Mina's school form, order groceries, text the babysitter, and I think I'm forgetting something for Monday...
+                </Text>
+              </View>
+              <IconSymbol name="square.and.pencil" size={28} color={Colors.primaryDeepRose + '60'} />
+            </View>
+          </View>
         )}
 
         {/* Last organized hint */}
@@ -551,13 +624,19 @@ export default function DumpScreen() {
 
         {/* Organize button */}
         <PrimaryButton
-          label="Organize My Brain"
+          label="Organize My Brain  ✦"
           loadingLabel="Sorting the mental load…"
           onPress={handleOrganize}
           loading={loading}
           disabled={isDisabled}
           style={styles.button}
         />
+
+        {/* Reassurance row */}
+        <View style={styles.reassuranceRow}>
+          <Text style={styles.reassuranceHeart}>{'♡'}</Text>
+          <Text style={styles.reassuranceText}>Nothing's too small. You've got this.</Text>
+        </View>
 
         {/* Organize error message */}
         {error && (
@@ -663,53 +742,143 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 16,
   },
+  // Header
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
   appName: {
-    fontSize: 30,
+    fontSize: 38,
     fontWeight: '700',
     color: Colors.textMain,
     fontFamily: 'Nunito_700Bold',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+  },
+  appNameHeart: {
+    fontSize: 28,
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_700Bold',
+    marginBottom: 4,
   },
   tagline: {
-    fontSize: 16,
+    fontSize: 17,
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
-    lineHeight: 22,
-    marginTop: 0,
+    lineHeight: 24,
+    marginTop: -4,
   },
+  // Input card
   inputCard: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 18,
-    boxShadow: '0 1px 3px rgba(63, 49, 44, 0.06), 0 4px 12px rgba(63, 49, 44, 0.04)',
-  } as object,
+    padding: 20,
+    shadowColor: 'rgba(63,49,44,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  sparkleIcon: {
+    fontSize: 18,
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_700Bold',
+  },
+  cardHeading: {
+    fontSize: 17,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+  },
+  helperSubtext: {
+    fontSize: 15,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
   textInput: {
-    minHeight: 180,
+    minHeight: 160,
     fontSize: 16,
     color: Colors.textMain,
     fontFamily: 'Nunito_400Regular',
     lineHeight: 24,
     textAlignVertical: 'top',
   },
-  micRow: {
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 14,
+  },
+  voiceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 16,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+  },
+  voiceRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
-  talkCaption: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontFamily: 'Nunito_400Regular',
-    fontStyle: 'italic',
+  voiceLabel: {
+    fontSize: 15,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
   },
-  micImage: {
-    width: 96,
-    height: 96,
+  voiceSubLabel: {
+    fontSize: 12,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  micButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primaryDeepRose,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primaryDeepRose,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  micRingOuter: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Colors.primaryBlush + '22',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micRingMid: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: Colors.primaryBlush + '33',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Waveform bars
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 32,
+  },
+  waveformBar: {
+    width: 5,
+    height: 32,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
   },
   // Voice status card
   voiceCard: {
@@ -721,8 +890,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   voiceCardPermission: {
-    backgroundColor: Colors.clay + '14',
-    borderColor: Colors.clay + '33',
+    backgroundColor: '#C8846022',
+    borderColor: '#C8846044',
   },
   voiceCardRow: {
     flexDirection: 'row',
@@ -763,27 +932,45 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  // Helper / example card
   helperCard: {
     backgroundColor: Colors.primaryBlush + '14',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.primaryBlush + '33',
+    borderColor: Colors.primaryBlush + '30',
+  },
+  helperCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  helperCardLeft: {
+    flex: 1,
+    gap: 6,
+  },
+  helperLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  helperSparkle: {
+    fontSize: 12,
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_700Bold',
   },
   helperLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: Colors.primaryDeepRose,
     fontFamily: 'Nunito_700Bold',
-    letterSpacing: 1,
-    marginBottom: 6,
+    letterSpacing: 1.2,
   },
   helperText: {
     fontSize: 14,
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
     lineHeight: 20,
-    fontStyle: 'italic',
   },
   lastOrganized: {
     fontSize: 13,
@@ -795,16 +982,33 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 4,
   },
+  // Reassurance row
+  reassuranceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  reassuranceHeart: {
+    fontSize: 14,
+    color: Colors.primaryDeepRose,
+  },
+  reassuranceText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+  },
   errorBox: {
-    backgroundColor: Colors.clay + '22',
+    backgroundColor: '#C8846022',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.clay + '44',
+    borderColor: '#C8846044',
   },
   errorText: {
     fontSize: 14,
-    color: Colors.clay,
+    color: '#C08060',
     fontFamily: 'Nunito_400Regular',
     textAlign: 'center',
     lineHeight: 20,
