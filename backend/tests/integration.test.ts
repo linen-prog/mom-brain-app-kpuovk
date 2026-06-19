@@ -46,7 +46,7 @@ describe("API Integration Tests", () => {
 
     test("Organize brain dump with longer text", async () => {
       // Add longer delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
 
       const res = await api("/api/organize", {
         method: "POST",
@@ -63,7 +63,7 @@ describe("API Integration Tests", () => {
 
     test("Organize brain dump with minimal text", async () => {
       // Add longer delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
 
       const res = await api("/api/organize", {
         method: "POST",
@@ -122,7 +122,7 @@ describe("API Integration Tests", () => {
   describe("POST /api/transcribe", () => {
     test("Transcribe valid audio file", async () => {
       // Add delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
 
       const form = new FormData();
       form.append("audio", createTestAudioFile("test.wav", 500));
@@ -164,7 +164,10 @@ describe("API Integration Tests", () => {
 
     test("Reject request with file too large", async () => {
       const form = new FormData();
-      form.append("audio", createTestFile("large.wav", 100 * 1024 * 1024, "audio/wav"));
+      // Create a file larger than 10MB limit (11MB)
+      const largeBuffer = new Uint8Array(11 * 1024 * 1024);
+      const largeFile = new File([largeBuffer], "large.wav", { type: "audio/wav" });
+      form.append("audio", largeFile);
 
       const res = await api("/api/transcribe", {
         method: "POST",

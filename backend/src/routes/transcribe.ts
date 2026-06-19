@@ -135,6 +135,7 @@ export function register(app: App, fastify: FastifyInstance) {
       // Retry logic for rate limits
       let lastError: unknown;
       for (let attempt = 0; attempt < 5; attempt++) {
+        app.logger.debug({ attempt }, 'transcribe_attempt_start');
         try {
           const { text } = await generateText({
             model: gateway('google/gemini-2.5-flash'),
@@ -174,6 +175,8 @@ export function register(app: App, fastify: FastifyInstance) {
           return reply.status(200).send({ text: finalText });
         } catch (error) {
           lastError = error;
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          app.logger.debug({ error, errorMsg, stack: error instanceof Error ? error.stack : undefined }, 'generateText error');
 
           if (isRateLimitError(error)) {
             if (attempt < 4) {
@@ -202,8 +205,11 @@ export function register(app: App, fastify: FastifyInstance) {
         }
       }
 
+      const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+      const errorStack = lastError instanceof Error ? lastError.stack : undefined;
+      const errorName = lastError instanceof Error ? lastError.name : undefined;
       app.logger.error(
-        { err: lastError, bytes: fileSize, mimeType },
+        { err: lastError, errorMessage, errorName, errorStack, bytes: fileSize, mimeType },
         'transcribe_failed',
       );
       return reply.status(500).send({
