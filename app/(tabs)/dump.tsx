@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -31,6 +32,8 @@ import { requestMicPermission, transcribeAudio, VoiceError } from '@/utils/voice
 import { IconSymbol } from '@/components/IconSymbol';
 
 const FALLBACK_CHECK_IN = "I caught it all. Pick one small thing — that's enough.";
+
+const MIC_RECORDING_IMG = require('../../assets/images/8c36687b-7237-4e76-8aa0-b122e56879de.jpeg');
 
 // ─── Voice UI state ───────────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'transcribing' | 'permission_needed';
@@ -445,6 +448,15 @@ export default function DumpScreen() {
 
   // ── Mic button inner content ─────────────────────────────────────────────
   const micButtonInner = (() => {
+    if (isRecording) {
+      return (
+        <Image
+          source={MIC_RECORDING_IMG}
+          style={styles.micImage}
+          resizeMode="cover"
+        />
+      );
+    }
     if (isTranscribing) {
       return <WaveformBars barAnims={barAnims} />;
     }
@@ -456,6 +468,29 @@ export default function DumpScreen() {
 
   // ── Mic button with optional rings ──────────────────────────────────────
   const micButtonNode = (() => {
+    if (isRecording) {
+      return (
+        <Animated.View style={{ opacity: pulseAnim }}>
+          <View style={styles.micRingOuter}>
+            <View style={styles.micRingMid}>
+              <TouchableOpacity
+                onPress={handleMicPress}
+                disabled={isTranscribing}
+                activeOpacity={0.85}
+                accessibilityLabel={micAccessibilityLabel}
+              >
+                <Image
+                  source={MIC_RECORDING_IMG}
+                  style={styles.micImageButton}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      );
+    }
+
     const button = (
       <TouchableOpacity
         onPress={handleMicPress}
@@ -468,18 +503,6 @@ export default function DumpScreen() {
         </View>
       </TouchableOpacity>
     );
-
-    if (isRecording) {
-      return (
-        <Animated.View style={{ opacity: pulseAnim }}>
-          <View style={styles.micRingOuter}>
-            <View style={styles.micRingMid}>
-              {button}
-            </View>
-          </View>
-        </Animated.View>
-      );
-    }
 
     return (
       <Animated.View style={{ opacity: pulseAnim }}>
@@ -867,6 +890,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryBlush + '33',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  micImageButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: 'hidden',
+  },
+  micImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
   },
   // Waveform bars
   waveformContainer: {
