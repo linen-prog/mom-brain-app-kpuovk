@@ -1,3 +1,4 @@
+// redeploy to pick up OPENROUTER_API_KEY
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { App } from '../index.js';
@@ -276,18 +277,17 @@ export function register(app: App, fastify: FastifyInstance) {
               meals: ['Plan weekly menu'],
               messages: ['Call mom'],
               holdingForLater: [],
-              work: [],
               momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-              taskMeta: [],
-              trackingItems: [],
-              rhythmInsights: {
-                topCategories: ['errands', 'meals', 'home'],
-                recurringThemes: ['household management', 'family logistics'],
-                momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-              },
             };
 
-            const result = OrganizeSchema.parse(mockResult);
+            let result;
+            try {
+              result = OrganizeSchema.parse(mockResult);
+            } catch (zodError) {
+              app.logger.error({ zodError, mockResult }, 'Schema parse error in test mode');
+              throw zodError;
+            }
+
             const elapsedMs = Date.now() - startTime;
 
             app.logger.info(
@@ -307,6 +307,7 @@ export function register(app: App, fastify: FastifyInstance) {
               'Successfully organized brain dump',
             );
 
+            app.logger.debug({ resultKeys: Object.keys(result) }, 'About to send test mode response');
             return reply.status(200).send(result);
           }
 
