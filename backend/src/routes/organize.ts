@@ -245,12 +245,9 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
       try {
-        const { text, kids, partnerName } = request.body;
-
-        app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize');
+        const { text, kids, partnerName } = request.body || {};
 
         if (!text || text.trim().length === 0) {
-          app.logger.warn('Text is required but was empty');
           return reply.status(400).send({ error: 'text is required' });
         }
 
@@ -266,7 +263,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
         if (isTestMode) {
           app.logger.info({ textLength: trimmedText.length }, 'organize_test_mode_mock_response');
-          return reply.status(200).send({
+          return {
             doToday: ['Buy milk', 'Schedule dentist appointment'],
             thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
             kids: [],
@@ -276,7 +273,7 @@ export function register(app: App, fastify: FastifyInstance) {
             messages: ['Call mom'],
             holdingForLater: [],
             momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-          });
+          };
         }
 
         // Retry logic for rate limits with exponential backoff (only for real API calls)
