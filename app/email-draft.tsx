@@ -265,6 +265,11 @@ export default function EmailDraftScreen() {
             >
               <Text style={styles.sendButtonText}>Send via Mail App  →</Text>
             </TouchableOpacity>
+            {encodeURIComponent(draftSubject).length + encodeURIComponent(draftBody).length > 1800 && (
+              <Text style={styles.mailtoWarning}>
+                Tip: For long emails, use Copy to Clipboard and paste into your mail app for best results.
+              </Text>
+            )}
 
             <TouchableOpacity
               style={[styles.copyButton, copied && styles.copyButtonDone]}
@@ -536,5 +541,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     color: Colors.textMuted,
     textDecorationLine: 'underline',
+  },
+  mailtoWarning: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 6,
   },
 });

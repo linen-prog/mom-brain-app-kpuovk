@@ -1,6 +1,6 @@
 import "react-native-reanimated";
-import React, { useEffect, useState } from "react";
-import { Stack, useRouter } from "expo-router";
+import React, { useEffect } from "react";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -22,7 +22,6 @@ import {
   Nunito_600SemiBold,
   Nunito_700Bold,
 } from "@expo-google-fonts/nunito";
-import { getOnboardingDone } from "@/utils/storage";
 
 const DevErrorBoundary = __DEV__
   ? ErrorBoundary
@@ -36,28 +35,17 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
     Nunito_500Medium,
     Nunito_600SemiBold,
     Nunito_700Bold,
   });
-  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   useEffect(() => {
     if (!fontsLoaded) return;
-
     SplashScreen.hideAsync();
-
-    getOnboardingDone().then((done) => {
-      console.log('[Layout] onboarding done:', done);
-      if (!done) {
-        router.replace("/onboarding");
-      }
-      setOnboardingChecked(true);
-    });
-  }, [fontsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fontsLoaded]);
 
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
@@ -95,7 +83,6 @@ export default function RootLayout() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                 <Stack.Screen name="email-draft" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style="dark" />

@@ -34,6 +34,8 @@ import {
   KidProfile,
   TaskMeta,
   TrackingItem,
+  getOnboardingDone,
+  setOnboardingDone,
 } from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
@@ -143,6 +145,10 @@ export default function DumpScreen() {
   // Partner tasks modal
   const [partnerModalVisible, setPartnerModalVisible] = useState(false);
 
+  // Onboarding modal
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
+  const [selectedStages, setSelectedStages] = useState<string[]>([]);
+
   // Voice state
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -166,7 +172,7 @@ export default function DumpScreen() {
   ).current;
   const barLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // ── Load saved dump + kids + partner ────────────────────────────────────
+  // ── Load saved dump + kids + partner + onboarding check ─────────────────
   useEffect(() => {
     getLatestDump().then((dump) => {
       if (dump) {
@@ -177,6 +183,12 @@ export default function DumpScreen() {
     });
     getKids().then(setKids);
     getPartnerName().then(setPartnerName);
+    getOnboardingDone().then((done) => {
+      if (!done) {
+        console.log('[Dump] First launch — showing onboarding modal');
+        setOnboardingVisible(true);
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helper fade ──────────────────────────────────────────────────────────
@@ -759,6 +771,72 @@ export default function DumpScreen() {
         )}
       </ScrollView>
 
+      {/* Onboarding modal */}
+      <Modal
+        visible={onboardingVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('[Dump] Onboarding modal dismissed via back');
+          setOnboardingDone();
+          setOnboardingVisible(false);
+        }}
+      >
+        <View style={styles.onboardingOverlay}>
+          <View style={styles.onboardingCard}>
+            <Text style={styles.onboardingAppName}>Mom Brain</Text>
+            <Text style={styles.onboardingWelcome}>Your mental load, finally organized.</Text>
+            <Text style={styles.onboardingSubtitle}>Dump everything on your mind — we'll sort it out.</Text>
+
+            <Text style={styles.onboardingStageLabel}>What stage are you in?</Text>
+            <View style={styles.onboardingStageRow}>
+              {(['Newborn', 'Toddler', 'School-age', 'Teen'] as const).map((stage) => {
+                const isSelected = selectedStages.includes(stage);
+                return (
+                  <Pressable
+                    key={stage}
+                    style={[styles.onboardingStageChip, isSelected && styles.onboardingStageChipSelected]}
+                    onPress={() => {
+                      console.log('[Dump] Onboarding stage toggled:', stage);
+                      setSelectedStages((prev) =>
+                        prev.includes(stage) ? prev.filter((s) => s !== stage) : [...prev, stage]
+                      );
+                    }}
+                  >
+                    <Text style={[styles.onboardingStageText, isSelected && styles.onboardingStageTextSelected]}>
+                      {stage}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.onboardingGetStarted}
+              activeOpacity={0.85}
+              onPress={() => {
+                console.log('[Dump] Onboarding "Get Started" pressed — stages:', selectedStages);
+                setOnboardingDone();
+                setOnboardingVisible(false);
+              }}
+            >
+              <Text style={styles.onboardingGetStartedText}>Get Started  ✦</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Dump] Onboarding "Skip" pressed');
+                setOnboardingDone();
+                setOnboardingVisible(false);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.onboardingSkip}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Partner tasks modal */}
       <Modal
         visible={partnerModalVisible}
@@ -1305,5 +1383,104 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Nunito_600SemiBold',
     color: Colors.primaryDeepRose,
+  },
+  onboardingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(30,18,14,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  onboardingCard: {
+    backgroundColor: '#FFFDFC',
+    borderRadius: 28,
+    padding: 28,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#3F312C',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+    gap: 12,
+  },
+  onboardingAppName: {
+    fontSize: 30,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+    letterSpacing: -0.4,
+  },
+  onboardingWelcome: {
+    fontSize: 17,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textMain,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  onboardingSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  onboardingStageLabel: {
+    fontSize: 13,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textBody,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  onboardingStageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignSelf: 'stretch',
+  },
+  onboardingStageChip: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    backgroundColor: Colors.card,
+  },
+  onboardingStageChipSelected: {
+    borderColor: Colors.primaryDeepRose,
+    backgroundColor: Colors.primaryDeepRose + '18',
+  },
+  onboardingStageText: {
+    fontSize: 14,
+    fontFamily: 'Nunito_500Medium',
+    color: Colors.textBody,
+  },
+  onboardingStageTextSelected: {
+    color: Colors.primaryDeepRose,
+    fontFamily: 'Nunito_700Bold',
+  },
+  onboardingGetStarted: {
+    backgroundColor: Colors.primaryDeepRose,
+    borderRadius: 18,
+    paddingVertical: 15,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginTop: 8,
+    shadowColor: Colors.primaryDeepRose,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  onboardingGetStartedText: {
+    fontSize: 17,
+    fontFamily: 'Nunito_700Bold',
+    color: '#FFFFFF',
+  },
+  onboardingSkip: {
+    fontSize: 13,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    textDecorationLine: 'underline',
+    marginTop: 4,
   },
 });
