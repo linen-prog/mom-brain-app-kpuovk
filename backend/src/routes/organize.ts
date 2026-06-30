@@ -244,73 +244,70 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      const { text, kids, partnerName } = request.body;
+      try {
+        const { text, kids, partnerName } = request.body;
 
-      app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize');
+        app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize');
 
-      if (!text || text.trim().length === 0) {
-        app.logger.warn('Text is required but was empty');
-        return reply.status(400).send({ error: 'text is required' });
-      }
+        if (!text || text.trim().length === 0) {
+          app.logger.warn('Text is required but was empty');
+          return reply.status(400).send({ error: 'text is required' });
+        }
 
-      const startTime = Date.now();
-      const trimmedText = text.trim();
+        const startTime = Date.now();
+        const trimmedText = text.trim();
 
-      // Retry logic for rate limits with exponential backoff
+        // Check for test mode BEFORE entering retry loop
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        const isTestMode = !apiKey;
+
+        app.logger.debug({ isTestMode, hasApiKey: !!apiKey }, 'Mode check');
+
+        if (isTestMode) {
+          // In test mode without API key, return a mock response immediately
+          app.logger.info({ textLength: trimmedText.length }, 'organize_test_mode_mock_response');
+
+          const mockResult: OrganizeResponse = {
+            doToday: ['Buy milk', 'Schedule dentist appointment'],
+            thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+            kids: [],
+            home: ['Fix the kitchen sink'],
+            errands: ['Buy milk'],
+            meals: ['Plan weekly menu'],
+            messages: ['Call mom'],
+            holdingForLater: [],
+            momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+          };
+
+          const elapsedMs = Date.now() - startTime;
+
+          app.logger.info(
+            {
+              elapsedMs,
+              doTodayCount: mockResult.doToday.length,
+              thisWeekCount: mockResult.thisWeek.length,
+              kidsCount: mockResult.kids.length,
+              homeCount: mockResult.home.length,
+              errandsCount: mockResult.errands.length,
+              mealsCount: mockResult.meals.length,
+              messagesCount: mockResult.messages.length,
+              holdingForLaterCount: mockResult.holdingForLater.length,
+              testMode: true,
+            },
+            'Successfully organized brain dump',
+          );
+
+          app.logger.debug('About to send mock response');
+          const sent = reply.status(200).send(mockResult);
+          app.logger.debug('Mock response sent');
+          return sent;
+        }
+
+      // Retry logic for rate limits with exponential backoff (only for real API calls)
       let lastError: unknown;
       for (let attempt = 0; attempt < 5; attempt++) {
         app.logger.debug({ attempt }, 'organize_attempt_start');
         try {
-          const apiKey = process.env.OPENROUTER_API_KEY;
-          const isTestMode = !apiKey;
-
-          if (isTestMode) {
-            // In test mode without API key, return a mock response
-            app.logger.info({ textLength: trimmedText.length }, 'organize_test_mode_mock_response');
-
-            const mockResult = {
-              doToday: ['Buy milk', 'Schedule dentist appointment'],
-              thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-              kids: [],
-              home: ['Fix the kitchen sink'],
-              errands: ['Buy milk'],
-              meals: ['Plan weekly menu'],
-              messages: ['Call mom'],
-              holdingForLater: [],
-              momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-            };
-
-            let result;
-            try {
-              result = OrganizeSchema.parse(mockResult);
-            } catch (zodError) {
-              app.logger.error({ zodError, mockResult }, 'Schema parse error in test mode');
-              throw zodError;
-            }
-
-            const elapsedMs = Date.now() - startTime;
-
-            app.logger.info(
-              {
-                elapsedMs,
-                attempts: attempt + 1,
-                doTodayCount: result.doToday.length,
-                thisWeekCount: result.thisWeek.length,
-                kidsCount: result.kids.length,
-                homeCount: result.home.length,
-                errandsCount: result.errands.length,
-                mealsCount: result.meals.length,
-                messagesCount: result.messages.length,
-                holdingForLaterCount: result.holdingForLater.length,
-                testMode: true,
-              },
-              'Successfully organized brain dump',
-            );
-
-            app.logger.debug({ resultKeys: Object.keys(result) }, 'About to send test mode response');
-            return reply.status(200).send(result);
-          }
-
           const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
           const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
 
@@ -476,17 +473,29 @@ export function register(app: App, fastify: FastifyInstance) {
         }
       }
 
-      const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
-      const errorStack = lastError instanceof Error ? lastError.stack : undefined;
-      const errorName = lastError instanceof Error ? lastError.name : undefined;
-      app.logger.error(
-        { err: lastError, errorMessage, errorName, errorStack, textLength: trimmedText.length },
-        'Failed to organize',
-      );
-      return reply.status(500).send({
-        error: 'server_error',
-        message: 'Something got tangled. Try again.',
-      });
+        // If we reach here, we failed after all retries
+        const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+        const errorStack = lastError instanceof Error ? lastError.stack : undefined;
+        const errorName = lastError instanceof Error ? lastError.name : undefined;
+        app.logger.error(
+          { err: lastError, errorMessage, errorName, errorStack, textLength: trimmedText.length },
+          'Failed to organize',
+        );
+        return reply.status(500).send({
+          error: 'server_error',
+          message: 'Something got tangled. Try again.',
+        });
+      } catch (handlerError) {
+        const errorMsg = handlerError instanceof Error ? handlerError.message : String(handlerError);
+        app.logger.error(
+          { err: handlerError, errorMsg, stack: handlerError instanceof Error ? handlerError.stack : undefined },
+          'Unexpected error in organize handler',
+        );
+        return reply.status(500).send({
+          error: 'server_error',
+          message: 'Something got tangled. Try again.',
+        });
+      }
     },
   );
 }

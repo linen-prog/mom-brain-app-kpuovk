@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { api, authenticatedApi, signUpTestUser, expectStatus, connectWebSocket, connectAuthenticatedWebSocket, waitForMessage, createTestFile, createTestAudioFile } from "./helpers";
+import { api, authenticatedApi, signUpTestUser, expectStatus, connectWebSocket, connectAuthenticatedWebSocket, waitForMessage, createTestFile } from "./helpers";
 
 describe("API Integration Tests", () => {
   // Shared state for chaining tests (e.g., created resource IDs, auth tokens)
@@ -157,7 +157,7 @@ describe("API Integration Tests", () => {
       await new Promise(resolve => setTimeout(resolve, 10000));
 
       const form = new FormData();
-      form.append("audio", createTestAudioFile("test.wav", 500));
+      form.append("audio", createTestFile("test.wav", Buffer.alloc(500), "audio/wav"));
 
       const res = await api("/api/transcribe", {
         method: "POST",
