@@ -13,10 +13,13 @@ import {
   Linking,
   Modal,
   Pressable,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -24,7 +27,7 @@ import {
   setAudioModeAsync,
 } from 'expo-audio';
 import { Colors, CategoryColors } from '@/constants/Colors';
-import { organizeText, OrganizeError, OrganizeResponse } from '@/utils/api';
+import { organizeText, organizeImages, OrganizeError, OrganizeResponse } from '@/utils/api';
 import {
   getLatestDump,
   saveLatestDump,
@@ -152,6 +155,11 @@ export default function DumpScreen() {
   // Voice state
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  // Image state
+  const [selectedImages, setSelectedImages] = useState<{ uri: string; base64: string; mimeType: string }[]>([]);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // expo-audio hook — must be called at top level
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -407,6 +415,98 @@ export default function DumpScreen() {
     Linking.openSettings();
   }, []);
 
+  // ── Image picker ─────────────────────────────────────────────────────────
+  const handlePickImages = useCallback(async () => {
+    console.log('[Image] Camera button pressed — current image count:', selectedImages.length);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setImageError(null);
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log('[Image] Media library permission status:', status);
+    if (status !== 'granted') {
+      setImageError('Photo library permission is needed to pick screenshots.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images' as ImagePicker.MediaType,
+      allowsMultipleSelection: true,
+      selectionLimit: 3,
+      base64: true,
+      quality: 0.7,
+    });
+
+    if (result.canceled) {
+      console.log('[Image] Image picker cancelled');
+      return;
+    }
+
+    const picked = result.assets
+      .filter((a) => a.base64)
+      .map((a) => ({
+        uri: a.uri,
+        base64: a.base64 as string,
+        mimeType: a.mimeType ?? 'image/jpeg',
+      }));
+
+    const combined = [...selectedImages, ...picked].slice(0, 3);
+    console.log('[Image] Images selected — count:', combined.length);
+    setSelectedImages(combined);
+  }, [selectedImages]);
+
+  const handleRemoveImage = useCallback((index: number) => {
+    console.log('[Image] Remove image at index:', index);
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleScanScreenshots = useCallback(async () => {
+    if (selectedImages.length === 0 || imageLoading) return;
+    console.log('[Image] "Scan Screenshot" pressed — images:', selectedImages.length, '| kids:', kids.length, '| partner:', partnerName ?? 'none');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setImageLoading(true);
+    setImageError(null);
+
+    try {
+      const payload: { base64: string; mimeType: string }[] = selectedImages.map((img) => ({ base64: img.base64, mimeType: img.mimeType }));
+      const response = await organizeImages(payload, {
+        kids: kids.length > 0 ? kids : undefined,
+        partnerName: partnerName ?? undefined,
+      });
+
+      if (response.noActionableContent) {
+        console.log('[Image] No actionable content found in screenshot(s)');
+        setImageError('Nothing actionable found in that image — try a different screenshot.');
+        setImageLoading(false);
+        return;
+      }
+
+      console.log('[Image] Scan success — navigating to screenshot-review');
+      router.push({
+        pathname: '/screenshot-review',
+        params: {
+          result: JSON.stringify(response),
+          imageCount: String(selectedImages.length),
+        },
+      });
+      setSelectedImages([]);
+    } catch (err: unknown) {
+      console.error('[Image] Scan error:', err);
+      if (err instanceof OrganizeError) {
+        if (err.kind === 'rate_limited') {
+          setImageError("Mom Brain needs a minute to catch up. Try again shortly.");
+        } else if (err.kind === 'network') {
+          setImageError("I couldn't reach the cloud. Check your connection and try again.");
+        } else {
+          setImageError("Something got tangled on my end. Give it another try in a moment.");
+        }
+      } else {
+        setImageError("Something got tangled on my end. Give it another try in a moment.");
+      }
+    } finally {
+      setImageLoading(false);
+    }
+  }, [selectedImages, imageLoading, kids, partnerName, router]);
+
   // ── Partner tasks modal ──────────────────────────────────────────────────
   const partnerTasks: TaskMeta[] = result?.taskMeta?.filter((m) => m.isPartnerTask) ?? [];
   const hasPartnerTasks = partnerTasks.length > 0;
@@ -465,7 +565,7 @@ export default function DumpScreen() {
 
   const micButtonInner = (() => {
     if (isTranscribing) return <WaveformBars barAnims={barAnims} />;
-    if (isPermissionNeeded) return <IconSymbol name="mic.slash.fill" size={28} color="#FFFFFF" />;
+    if (isPermissionNeeded) return <IconSymbol ios_icon_name="mic.slash.fill" android_material_icon_name="mic-off" size={28} color="#FFFFFF" />;
     return <View style={styles.playTriangle} />;
   })();
 
@@ -551,7 +651,7 @@ export default function DumpScreen() {
 
           <View style={styles.voiceRow}>
             <View style={styles.voiceRowLeft}>
-              <IconSymbol name="mic.fill" size={16} color={Colors.primaryDeepRose} />
+              <IconSymbol ios_icon_name="mic.fill" android_material_icon_name="mic" size={16} color={Colors.primaryDeepRose} />
               <View>
                 <Text style={styles.voiceLabel}>Talk it out</Text>
                 <Text style={styles.voiceSubLabel}>Tap to voice your thoughts</Text>
@@ -559,7 +659,78 @@ export default function DumpScreen() {
             </View>
             {micButtonNode}
           </View>
+
+          <View style={styles.divider} />
+
+          {/* Screenshot row */}
+          <View style={styles.voiceRow}>
+            <View style={styles.voiceRowLeft}>
+              <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={16} color={Colors.primaryDeepRose} />
+              <View>
+                <Text style={styles.voiceLabel}>Screenshot it</Text>
+                <Text style={styles.voiceSubLabel}>Tap to pick a photo</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={handlePickImages}
+              disabled={selectedImages.length >= 3}
+              activeOpacity={0.85}
+              accessibilityLabel="Pick screenshot"
+            >
+              <View style={[styles.micButton, selectedImages.length >= 3 && styles.micButtonDisabled]}>
+                <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={28} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Thumbnail row */}
+          {selectedImages.length > 0 && (
+            <View style={styles.thumbnailRow}>
+              {selectedImages.map((img, index) => {
+                const imgSource: ImageSourcePropType = { uri: img.uri };
+                return (
+                  <View key={index} style={styles.thumbnailWrapper}>
+                    <Image source={imgSource} style={styles.thumbnail} />
+                    <TouchableOpacity
+                      style={styles.thumbnailRemove}
+                      onPress={() => handleRemoveImage(index)}
+                      activeOpacity={0.8}
+                      accessibilityLabel="Remove image"
+                    >
+                      <Text style={styles.thumbnailRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
+
+        {/* Scan screenshots button */}
+        {selectedImages.length > 0 && (
+          <TouchableOpacity
+            style={[styles.scanButton, (imageLoading || selectedImages.length === 0) && styles.scanButtonDisabled]}
+            onPress={handleScanScreenshots}
+            disabled={imageLoading || selectedImages.length === 0}
+            activeOpacity={0.85}
+          >
+            {imageLoading ? (
+              <View style={styles.scanButtonInner}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <Text style={styles.scanButtonText}>Reading your screenshot…</Text>
+              </View>
+            ) : (
+              <Text style={styles.scanButtonText}>Scan Screenshot  ✦</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Image error */}
+        {imageError !== null && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{imageError}</Text>
+          </View>
+        )}
 
         {/* Voice status card */}
         {voiceCardCopy !== null && (
@@ -606,7 +777,7 @@ export default function DumpScreen() {
                   Try something like: I need to sign Mina's school form, order groceries, text the babysitter, and I think I'm forgetting something for Monday...
                 </Text>
               </View>
-              <IconSymbol name="square.and.pencil" size={28} color={Colors.primaryDeepRose + '60'} />
+              <IconSymbol ios_icon_name="square.and.pencil" android_material_icon_name="edit" size={28} color={Colors.primaryDeepRose + '60'} />
             </View>
           </View>
         )}
@@ -1482,5 +1653,68 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textDecorationLine: 'underline',
     marginTop: 4,
+  },
+  // Image picker
+  micButtonDisabled: {
+    opacity: 0.45,
+  },
+  thumbnailRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    flexWrap: 'wrap',
+  },
+  thumbnailWrapper: {
+    position: 'relative',
+    width: 60,
+    height: 60,
+  },
+  thumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    backgroundColor: Colors.border,
+  },
+  thumbnailRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryDeepRose,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbnailRemoveText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontFamily: 'Nunito_700Bold',
+    lineHeight: 14,
+  },
+  scanButton: {
+    backgroundColor: Colors.primaryDeepRose,
+    borderRadius: 18,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primaryDeepRose,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  scanButtonDisabled: {
+    opacity: 0.55,
+  },
+  scanButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  scanButtonText: {
+    fontSize: 17,
+    fontFamily: 'Nunito_700Bold',
+    color: '#FFFFFF',
   },
 });

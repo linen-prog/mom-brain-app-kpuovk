@@ -138,6 +138,58 @@ export interface RhythmRecapResponse {
   weekLabel: string;
 }
 
+// ─── Organize images ──────────────────────────────────────────────────────────
+
+export interface OrganizeImageResponse extends OrganizeResponse {
+  noActionableContent?: boolean;
+  message?: string;
+  source?: 'screenshot';
+}
+
+export async function organizeImages(
+  images: { base64: string; mimeType: string }[],
+  options?: { kids?: KidProfile[]; partnerName?: string }
+): Promise<OrganizeImageResponse> {
+  console.log('[API] POST /api/organize-image — images:', images.length, '| kids:', options?.kids?.length ?? 0, '| partner:', options?.partnerName ?? 'none');
+
+  const body: Record<string, unknown> = { images };
+  if (options?.kids && options.kids.length > 0) body.kids = options.kids;
+  if (options?.partnerName) body.partnerName = options.partnerName;
+
+  let response: Response;
+  try {
+    response = await fetch(`${BACKEND_URL}/api/organize-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (fetchErr) {
+    console.error('[API] /api/organize-image network failure:', fetchErr);
+    throw new OrganizeError('network', "I couldn't reach the cloud. Check your connection and try again.");
+  }
+
+  if (!response.ok) {
+    let errBody: { error?: string; message?: string } = {};
+    try {
+      errBody = await response.json();
+    } catch {
+      const raw = await response.text().catch(() => '');
+      console.error('[API] /api/organize-image error (non-JSON):', response.status, raw);
+    }
+    console.error('[API] /api/organize-image error:', response.status, errBody);
+    if (errBody.error === 'rate_limited') {
+      throw new OrganizeError('rate_limited', errBody.message ?? "Mom Brain needs a minute to catch up. Try again shortly.");
+    }
+    throw new OrganizeError('server_error', errBody.message ?? "Something got tangled. Try again.");
+  }
+
+  const data = await response.json();
+  console.log('[API] /api/organize-image success — noActionableContent:', data.noActionableContent ?? false, '| categories:', Object.keys(data));
+  return data as OrganizeImageResponse;
+}
+
+// ─── Rhythm recap ─────────────────────────────────────────────────────────────
+
 export async function getRhythmRecap(params: RhythmRecapParams): Promise<RhythmRecapResponse> {
   console.log('[API] POST /api/rhythm-recap — completed:', params.completedTasks.length, '| pending:', params.pendingTasks.length, '| tracking:', params.trackingItems.length);
 
