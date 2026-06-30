@@ -2,8 +2,38 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { App } from '../index.js';
 
+interface Kid {
+  name: string;
+  age?: number;
+  grade?: string;
+  nicknames?: string[];
+}
+
 interface OrganizeRequestBody {
   text: string;
+  kids?: Kid[];
+  partnerName?: string;
+}
+
+interface TaskMeta {
+  taskText: string;
+  category: 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work' | 'holdingForLater';
+  childName: string | null;
+  delegation: 'me' | 'partner' | 'coparent' | 'kid';
+  isPartnerTask: boolean;
+}
+
+interface TrackingItem {
+  id: string;
+  text: string;
+  dueDate: string | null;
+  category: string;
+}
+
+interface RhythmInsight {
+  topCategories: string[];
+  recurringThemes: string[];
+  momCheckIn: string;
 }
 
 const OrganizeSchema = z.object({
@@ -15,14 +45,67 @@ const OrganizeSchema = z.object({
   meals: z.array(z.string()),
   messages: z.array(z.string()),
   holdingForLater: z.array(z.string()),
+  work: z.array(z.string()).optional(),
   momCheckIn: z.string().min(1),
+  taskMeta: z.array(z.object({
+    taskText: z.string(),
+    category: z.enum(['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work', 'holdingForLater']),
+    childName: z.string().nullable(),
+    delegation: z.enum(['me', 'partner', 'coparent', 'kid']),
+    isPartnerTask: z.boolean(),
+  })).optional(),
+  trackingItems: z.array(z.object({
+    id: z.string(),
+    text: z.string(),
+    dueDate: z.string().nullable(),
+    category: z.string(),
+  })).optional(),
+  rhythmInsights: z.object({
+    topCategories: z.array(z.string()),
+    recurringThemes: z.array(z.string()),
+    momCheckIn: z.string(),
+  }).optional(),
 });
 
 type OrganizeResponse = z.infer<typeof OrganizeSchema>;
 
-const SYSTEM_PROMPT = `You are organizing a brain dump into these categories: doToday (for today/tomorrow), thisWeek (later this week), kids (child-related), home (household tasks), errands (shopping/outside tasks), meals (food/cooking), messages (texts/calls/emails), holdingForLater (not urgent), and momCheckIn (1-3 calm sentences with a next step).
+const SYSTEM_PROMPT = `You are a compassionate AI assistant helping a busy mom organize her mental load. Parse the brain dump text and return a JSON object with these exact fields.
 
-Use her exact words. Keep it simple and faithful to what she said. momCheckIn should be warm but never use exclamation marks or productivity language like "You've got this".`;
+CATEGORIES:
+- doToday: urgent tasks for today
+- thisWeek: tasks for this week (not today)
+- kids: kid-related tasks
+- home: home/household tasks
+- errands: errands and shopping
+- meals: meal planning and food
+- messages: messages/calls to make
+- holdingForLater: future items, not urgent
+- work: work-related tasks
+- momCheckIn: a single warm, validating sentence acknowledging the mental load (NOT a list)
+
+KID-AWARE PARSING (if kids array provided):
+- Match child names and nicknames from the kids array against the dump text
+- Tag each task with childName in taskMeta if it mentions a specific child
+- If a name is ambiguous or not in the kids list, leave childName null — do NOT guess
+
+DELEGATION DETECTION:
+- "remind [name] to...", "[name] needs to...", "ask [name] to...", "[name] should..." patterns
+- If name matches partnerName → delegation: "partner", isPartnerTask: true
+- If it's a co-parent reference (e.g. "their dad", "ex") → delegation: "coparent", isPartnerTask: true
+- If it's a child's name → delegation: "kid", isPartnerTask: false
+- Default → delegation: "me", isPartnerTask: false
+
+TRACKING ITEMS (extract these as trackingItems, NOT as regular tasks):
+- Phrases like: "I need to remember that...", "coming up...", "starting next month...", "don't forget...", "keep an eye on...", "permission slip due...", "refill in...", "size change soon..."
+- Include dueDate (ISO 8601) if a date is mentioned, otherwise null
+- Generate a UUID for each id
+
+RHYTHM INSIGHTS:
+- topCategories: top 2-3 categories by item count
+- recurringThemes: themes you detect (e.g. "school logistics", "medical appointments", "meal planning")
+- momCheckIn: same as top-level momCheckIn
+
+IMPORTANT: Return valid JSON only. If taskMeta/trackingItems/rhythmInsights cannot be computed, return empty arrays and defaults rather than erroring. All existing fields (doToday, thisWeek, etc.) must remain identical.`;
 
 function isRateLimitError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -51,6 +134,20 @@ export function register(app: App, fastify: FastifyInstance) {
           required: ['text'],
           properties: {
             text: { type: 'string', description: 'Raw brain dump text to organize' },
+            kids: {
+              type: 'array',
+              description: 'Optional array of child information',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  age: { type: 'number' },
+                  grade: { type: 'string' },
+                  nicknames: { type: 'array', items: { type: 'string' } },
+                },
+              },
+            },
+            partnerName: { type: 'string', description: 'Optional partner/spouse name' },
           },
         },
         response: {
@@ -77,7 +174,44 @@ export function register(app: App, fastify: FastifyInstance) {
               meals: { type: 'array', items: { type: 'string' } },
               messages: { type: 'array', items: { type: 'string' } },
               holdingForLater: { type: 'array', items: { type: 'string' } },
+              work: { type: 'array', items: { type: 'string' } },
               momCheckIn: { type: 'string' },
+              taskMeta: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    taskText: { type: 'string' },
+                    category: {
+                      type: 'string',
+                      enum: ['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work', 'holdingForLater'],
+                    },
+                    childName: { type: 'string', nullable: true },
+                    delegation: { type: 'string', enum: ['me', 'partner', 'coparent', 'kid'] },
+                    isPartnerTask: { type: 'boolean' },
+                  },
+                },
+              },
+              trackingItems: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    text: { type: 'string' },
+                    dueDate: { type: 'string', nullable: true },
+                    category: { type: 'string' },
+                  },
+                },
+              },
+              rhythmInsights: {
+                type: 'object',
+                properties: {
+                  topCategories: { type: 'array', items: { type: 'string' } },
+                  recurringThemes: { type: 'array', items: { type: 'string' } },
+                  momCheckIn: { type: 'string' },
+                },
+              },
             },
           },
           400: {
@@ -107,9 +241,9 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      const { text } = request.body;
+      const { text, kids, partnerName } = request.body;
 
-      app.logger.info({ textLength: text?.length }, 'POST /api/organize');
+      app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize');
 
       if (!text || text.trim().length === 0) {
         app.logger.warn('Text is required but was empty');
@@ -140,7 +274,15 @@ export function register(app: App, fastify: FastifyInstance) {
               meals: ['Plan weekly menu'],
               messages: ['Call mom'],
               holdingForLater: [],
+              work: [],
               momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+              taskMeta: [],
+              trackingItems: [],
+              rhythmInsights: {
+                topCategories: ['errands', 'meals', 'home'],
+                recurringThemes: ['household management', 'family logistics'],
+                momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+              },
             };
 
             const result = OrganizeSchema.parse(mockResult);
@@ -166,8 +308,11 @@ export function register(app: App, fastify: FastifyInstance) {
             return reply.status(200).send(result);
           }
 
+          const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
+          const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
+
           const requestBody = {
-            model: 'openai/gpt-4o-mini',
+            model: 'google/gemini-2.5-flash',
             messages: [
               {
                 role: 'system',
@@ -175,7 +320,7 @@ export function register(app: App, fastify: FastifyInstance) {
               },
               {
                 role: 'user',
-                content: `Please organize this brain dump into JSON format:\n\n${trimmedText}\n\nReturn ONLY valid JSON with these exact keys: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, momCheckIn. Each array should contain strings, momCheckIn should be a non-empty string.`,
+                content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON. Include all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work (all arrays of strings), momCheckIn (string), taskMeta (array), trackingItems (array), rhythmInsights (object). If you cannot extract certain metadata, return empty arrays/defaults for those fields.`,
               },
             ],
           };
@@ -251,6 +396,16 @@ export function register(app: App, fastify: FastifyInstance) {
             }
           }
 
+          // Ensure new fields exist with safe defaults
+          parsed.work = parsed.work || [];
+          parsed.taskMeta = parsed.taskMeta || [];
+          parsed.trackingItems = parsed.trackingItems || [];
+          parsed.rhythmInsights = parsed.rhythmInsights || {
+            topCategories: [],
+            recurringThemes: [],
+            momCheckIn: parsed.momCheckIn || '',
+          };
+
           // Validate against schema
           const result = OrganizeSchema.parse(parsed);
 
@@ -268,6 +423,9 @@ export function register(app: App, fastify: FastifyInstance) {
               mealsCount: result.meals.length,
               messagesCount: result.messages.length,
               holdingForLaterCount: result.holdingForLater.length,
+              workCount: result.work?.length || 0,
+              taskMetaCount: result.taskMeta?.length || 0,
+              trackingItemsCount: result.trackingItems?.length || 0,
             },
             'Successfully organized brain dump',
           );

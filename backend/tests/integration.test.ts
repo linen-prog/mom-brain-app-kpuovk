@@ -178,4 +178,349 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("error");
     });
   });
+
+  describe("POST /api/email-draft", () => {
+    test("Generate email draft with required fields only", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Check progress on math homework",
+          context: "teacher",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("subject");
+      expect(data).toHaveProperty("body");
+      expect(data).toHaveProperty("recipientName");
+      expect(typeof data.subject).toBe("string");
+      expect(typeof data.body).toBe("string");
+    });
+
+    test("Generate email draft with all optional fields", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Request meeting about upcoming school event",
+          context: "other_parent",
+          recipientName: "John Smith",
+          childName: "Emma",
+          additionalNotes: "Prefer afternoon meetings",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("subject");
+      expect(data).toHaveProperty("body");
+      expect(typeof data.subject).toBe("string");
+      expect(typeof data.body).toBe("string");
+    });
+
+    test("Generate email draft with pediatrician context", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Ask about vaccination schedule",
+          context: "pediatrician",
+          childName: "Sophie",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("subject");
+      expect(data).toHaveProperty("body");
+    });
+
+    test("Generate email draft with work context", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Request deadline extension for project",
+          context: "work",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("subject");
+      expect(data).toHaveProperty("body");
+    });
+
+    test("Generate email draft with activity context", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Inquire about summer camp schedule",
+          context: "activity",
+          childName: "Lucas",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("subject");
+      expect(data).toHaveProperty("body");
+    });
+
+    test("Generate email draft with admin context", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Request school records update",
+          context: "admin",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("subject");
+      expect(data).toHaveProperty("body");
+    });
+
+    test("Reject request with missing taskText", async () => {
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: "teacher",
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing context", async () => {
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Check homework",
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with invalid context value", async () => {
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "Check homework",
+          context: "invalid_context",
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with empty taskText", async () => {
+      const res = await api("/api/email-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskText: "",
+          context: "teacher",
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+  });
+
+  describe("POST /api/rhythm/recap", () => {
+    test("Generate weekly recap with valid data", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedTasks: ["Buy groceries", "Schedule dentist", "Fix fence"],
+          pendingTasks: ["Call mom", "Review budget", "Plan menu"],
+          trackingItems: [
+            {
+              id: "track-1",
+              text: "Monitor project progress",
+              dueDate: "2024-07-05",
+              category: "work",
+            },
+            {
+              id: "track-2",
+              text: "Kid's activity signup",
+              dueDate: null,
+              category: "kids",
+            },
+          ],
+          daysUntilSunday: 3,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("doneThisWeek");
+      expect(data).toHaveProperty("rollingOver");
+      expect(data).toHaveProperty("comingUp");
+      expect(data).toHaveProperty("momMessage");
+      expect(data).toHaveProperty("weekLabel");
+      expect(Array.isArray(data.doneThisWeek)).toBe(true);
+      expect(Array.isArray(data.rollingOver)).toBe(true);
+      expect(Array.isArray(data.comingUp)).toBe(true);
+      expect(typeof data.momMessage).toBe("string");
+      expect(typeof data.weekLabel).toBe("string");
+    });
+
+    test("Generate weekly recap with minimal data", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedTasks: [],
+          pendingTasks: [],
+          trackingItems: [],
+          daysUntilSunday: 1,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("doneThisWeek");
+      expect(data).toHaveProperty("momMessage");
+    });
+
+    test("Generate weekly recap with complex tracking items", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedTasks: [
+            "Completed project milestone",
+            "Kids finished art class",
+            "Cleaned kitchen",
+          ],
+          pendingTasks: [
+            "Finish annual review",
+            "Plan summer camps",
+            "Home repairs",
+          ],
+          trackingItems: [
+            {
+              id: "track-abc123",
+              text: "Client followup",
+              dueDate: "2024-07-10",
+              category: "work",
+            },
+            {
+              id: "track-xyz789",
+              text: "Soccer equipment order",
+              dueDate: "2024-07-08",
+              category: "kids",
+            },
+            {
+              id: "track-home456",
+              text: "Bathroom renovation quote",
+              dueDate: null,
+              category: "home",
+            },
+          ],
+          daysUntilSunday: 2,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(Array.isArray(data.doneThisWeek)).toBe(true);
+      expect(Array.isArray(data.comingUp)).toBe(true);
+      expect(typeof data.weekLabel).toBe("string");
+    });
+
+    test("Reject request with missing completedTasks", async () => {
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pendingTasks: [],
+          trackingItems: [],
+          daysUntilSunday: 1,
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing pendingTasks", async () => {
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedTasks: [],
+          trackingItems: [],
+          daysUntilSunday: 1,
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing trackingItems", async () => {
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedTasks: [],
+          pendingTasks: [],
+          daysUntilSunday: 1,
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing daysUntilSunday", async () => {
+      const res = await api("/api/rhythm/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedTasks: [],
+          pendingTasks: [],
+          trackingItems: [],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+  });
 });
