@@ -122,7 +122,7 @@ export function register(app: App, fastify: FastifyInstance) {
               {
                 role: 'system',
                 content:
-                  'You are helping a busy parent draft a clear, polite, brief email. Tone: confident busy parent — NOT apologetic, NOT overly formal. Mirror how a real parent would write. Use recipientName in salutation if provided. Use childName for context if provided. Context mapping: teacher=school-related, pediatrician=medical, activity=camp/daycare, other_parent=logistics, work=manager message, admin=insurance/billing. Return ONLY valid JSON with: subject (string), body (string), recipientName (string or null).',
+                  'You are helping a busy parent draft a clear, polite, brief email. Tone: confident busy parent — NOT apologetic, NOT overly formal. Mirror how a real parent would write. Use recipientName in salutation if provided. Use childName for context if provided. Context mapping: teacher=school-related, pediatrician=medical, activity=camp/daycare, other_parent=logistics, work=manager message, admin=insurance/billing. Return ONLY valid JSON with: subject (string), body (string), recipientName (string or null). CRITICAL: Never invent, assume, or fabricate any specific date, time, name, reason, or detail not present in the task text. If a detail is needed but missing (e.g. no date given for an absence), use a bracketed placeholder like [date], [time], [reason] instead of guessing. If the task is vague, write a brief open-ended email that does not commit to specifics.',
               },
               {
                 role: 'user',

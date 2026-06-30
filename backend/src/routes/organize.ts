@@ -87,6 +87,7 @@ KID-AWARE PARSING (if kids array provided):
 - Match child names and nicknames from the kids array against the dump text
 - Tag each task with childName in taskMeta if it mentions a specific child
 - If a name is ambiguous or not in the kids list, leave childName null — do NOT guess
+- IMPORTANT: Only tag childName if the task is DIRECTLY about that child's care, school, health, or activity. If a name appears in a different context (e.g. a teacher named Emma, a friend's child, a coworker), do NOT tag it. Cross-check: before tagging childName, confirm the name appears in the provided Children list AND the task context is clearly about that child. When in doubt, leave childName null.
 
 DELEGATION DETECTION:
 - "remind [name] to...", "[name] needs to...", "ask [name] to...", "[name] should..." patterns
@@ -94,6 +95,7 @@ DELEGATION DETECTION:
 - If it's a co-parent reference (e.g. "their dad", "ex") → delegation: "coparent", isPartnerTask: true
 - If it's a child's name → delegation: "kid", isPartnerTask: false
 - Default → delegation: "me", isPartnerTask: false
+- COLLISION RULE: If a name matches BOTH a child's name AND the partner name, default to the child interpretation (delegation: 'kid') unless the phrase is unambiguously adult in context (e.g. 'remind my husband Jake', 'ask Jake about the mortgage'). Never assign delegation: 'partner' based solely on a name match — require adult-context phrasing.
 
 TRACKING ITEMS (extract these as trackingItems, NOT as regular tasks):
 - Phrases like: "I need to remember that...", "coming up...", "starting next month...", "don't forget...", "keep an eye on...", "permission slip due...", "refill in...", "size change soon..."

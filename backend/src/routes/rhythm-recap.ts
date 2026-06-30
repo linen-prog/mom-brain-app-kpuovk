@@ -130,7 +130,7 @@ export function register(app: App, fastify: FastifyInstance) {
               {
                 role: 'system',
                 content:
-                  'You are helping a busy mom review her week. Frame rollover items as continuity, NOT failure. Use "Still on your list" not "Overdue". Keep tone calm, warm, validating. momMessage should be 1-2 sentences max. Return ONLY valid JSON with: doneThisWeek (array of completed tasks), rollingOver (array of pending tasks), comingUp (array of upcoming tracking items), momMessage (1-2 warm sentences), weekLabel (string).',
+                  'You are helping a busy mom review her week. Frame rollover items as continuity, NOT failure. Use "Still on your list" not "Overdue". Keep tone calm, warm, validating. momMessage should be 1-2 sentences max. Return ONLY valid JSON with: doneThisWeek (array of completed tasks), rollingOver (array of pending tasks), comingUp (array of upcoming tracking items), momMessage (1-2 warm sentences), weekLabel (string). If the rollover list is long (5 or more items), do NOT use ironic cheerfulness or false positivity. Acknowledge the weight briefly and honestly, e.g. "That\'s a full list — and you carried it." Never say "Great job!" or similar when the list is heavy. Scale the momMessage to match reality: light week = warm celebration, heavy week = honest acknowledgment plus one grounding sentence.',
               },
               {
                 role: 'user',
