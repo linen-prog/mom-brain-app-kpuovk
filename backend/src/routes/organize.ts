@@ -261,13 +261,12 @@ export function register(app: App, fastify: FastifyInstance) {
         const apiKey = process.env.OPENROUTER_API_KEY;
         const isTestMode = !apiKey;
 
+        app.logger.debug({ hasKey: !!apiKey, keyLength: apiKey?.length || 0 }, 'openrouter_key_check');
         app.logger.debug({ isTestMode, hasApiKey: !!apiKey }, 'Mode check');
 
         if (isTestMode) {
-          // In test mode without API key, return a mock response immediately
           app.logger.info({ textLength: trimmedText.length }, 'organize_test_mode_mock_response');
-
-          const mockResult: OrganizeResponse = {
+          return reply.status(200).send({
             doToday: ['Buy milk', 'Schedule dentist appointment'],
             thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
             kids: [],
@@ -277,201 +276,178 @@ export function register(app: App, fastify: FastifyInstance) {
             messages: ['Call mom'],
             holdingForLater: [],
             momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-          };
-
-          const elapsedMs = Date.now() - startTime;
-
-          app.logger.info(
-            {
-              elapsedMs,
-              doTodayCount: mockResult.doToday.length,
-              thisWeekCount: mockResult.thisWeek.length,
-              kidsCount: mockResult.kids.length,
-              homeCount: mockResult.home.length,
-              errandsCount: mockResult.errands.length,
-              mealsCount: mockResult.meals.length,
-              messagesCount: mockResult.messages.length,
-              holdingForLaterCount: mockResult.holdingForLater.length,
-              testMode: true,
-            },
-            'Successfully organized brain dump',
-          );
-
-          app.logger.debug('About to send mock response');
-          const sent = reply.status(200).send(mockResult);
-          app.logger.debug('Mock response sent');
-          return sent;
+          });
         }
 
-      // Retry logic for rate limits with exponential backoff (only for real API calls)
-      let lastError: unknown;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        app.logger.debug({ attempt }, 'organize_attempt_start');
-        try {
-          const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
-          const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
-
-          const requestBody = {
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              {
-                role: 'system',
-                content: SYSTEM_PROMPT,
-              },
-              {
-                role: 'user',
-                content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON. Include all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work (all arrays of strings), momCheckIn (string), taskMeta (array), trackingItems (array), rhythmInsights (object). If you cannot extract certain metadata, return empty arrays/defaults for those fields.`,
-              },
-            ],
-          };
-
-          app.logger.debug({ model: requestBody.model }, 'calling_openrouter');
-
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://mombrain.app',
-              'X-Title': 'Mom Brain',
-            },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeout);
-
-          const responseStatus = response.status;
-          const responseText = await response.text();
-
-          app.logger.debug({ status: responseStatus, bodyLength: responseText.length }, 'openrouter_response');
-
-          if (responseStatus === 429) {
-            // Rate limit error
-            const error = new Error('Rate limited by OpenRouter');
-            (error as any).statusCode = 429;
-            throw error;
-          }
-
-          if (!response.ok) {
-            const errorMsg = `OpenRouter error ${responseStatus}`;
-            app.logger.error({ status: responseStatus, body: responseText.slice(0, 500) }, errorMsg);
-            throw new Error(errorMsg);
-          }
-
-          let data: any;
+        // Retry logic for rate limits with exponential backoff (only for real API calls)
+        let lastError: unknown;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          app.logger.debug({ attempt }, 'organize_attempt_start');
           try {
-            data = JSON.parse(responseText);
-          } catch (parseErr) {
-            app.logger.error({ responseText: responseText.slice(0, 500) }, 'Failed to parse OpenRouter response');
-            throw new Error('Invalid JSON response from OpenRouter');
-          }
+            const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
+            const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
 
-          const responseContent = data.choices?.[0]?.message?.content;
-          if (!responseContent) {
-            app.logger.error({ data }, 'No content in OpenRouter response');
-            throw new Error('No content in OpenRouter response');
-          }
+            const requestBody = {
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                {
+                  role: 'system',
+                  content: SYSTEM_PROMPT,
+                },
+                {
+                  role: 'user',
+                  content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON. Include all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work (all arrays of strings), momCheckIn (string), taskMeta (array), trackingItems (array), rhythmInsights (object). If you cannot extract certain metadata, return empty arrays/defaults for those fields.`,
+                },
+              ],
+            };
 
-          // Parse JSON response
-          let parsed: any;
-          try {
-            parsed = JSON.parse(responseContent);
-          } catch (parseErr) {
-            // Try to extract JSON from markdown code blocks if present
-            const jsonMatch = responseContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch) {
-              try {
-                parsed = JSON.parse(jsonMatch[1]);
-              } catch (e) {
+            app.logger.debug({ model: requestBody.model }, 'calling_openrouter');
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://mombrain.app',
+                'X-Title': 'Mom Brain',
+              },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
+
+            clearTimeout(timeout);
+
+            const responseStatus = response.status;
+            const responseText = await response.text();
+
+            app.logger.debug({ status: responseStatus, bodyLength: responseText.length }, 'openrouter_response');
+
+            if (responseStatus === 429) {
+              // Rate limit error
+              const error = new Error('Rate limited by OpenRouter');
+              (error as any).statusCode = 429;
+              throw error;
+            }
+
+            if (!response.ok) {
+              const errorMsg = `OpenRouter error ${responseStatus}`;
+              app.logger.error({ status: responseStatus, body: responseText.slice(0, 500) }, errorMsg);
+              throw new Error(errorMsg);
+            }
+
+            let data: any;
+            try {
+              data = JSON.parse(responseText);
+            } catch (parseErr) {
+              app.logger.error({ responseText: responseText.slice(0, 500) }, 'Failed to parse OpenRouter response');
+              throw new Error('Invalid JSON response from OpenRouter');
+            }
+
+            const responseContent = data.choices?.[0]?.message?.content;
+            if (!responseContent) {
+              app.logger.error({ data }, 'No content in OpenRouter response');
+              throw new Error('No content in OpenRouter response');
+            }
+
+            // Parse JSON response
+            let parsed: any;
+            try {
+              parsed = JSON.parse(responseContent);
+            } catch (parseErr) {
+              // Try to extract JSON from markdown code blocks if present
+              const jsonMatch = responseContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+              if (jsonMatch) {
+                try {
+                  parsed = JSON.parse(jsonMatch[1]);
+                } catch (e) {
+                  app.logger.error({ content: responseContent.slice(0, 500) }, 'Failed to parse JSON from OpenRouter');
+                  throw parseErr;
+                }
+              } else {
                 app.logger.error({ content: responseContent.slice(0, 500) }, 'Failed to parse JSON from OpenRouter');
                 throw parseErr;
               }
+            }
+
+            // Ensure new fields exist with safe defaults
+            parsed.work = parsed.work || [];
+            parsed.taskMeta = parsed.taskMeta || [];
+            parsed.trackingItems = parsed.trackingItems || [];
+            parsed.rhythmInsights = parsed.rhythmInsights || {
+              topCategories: [],
+              recurringThemes: [],
+              momCheckIn: parsed.momCheckIn || '',
+            };
+
+            // Validate against schema
+            const result = OrganizeSchema.parse(parsed);
+
+            const elapsedMs = Date.now() - startTime;
+
+            app.logger.info(
+              {
+                elapsedMs,
+                attempts: attempt + 1,
+                doTodayCount: result.doToday.length,
+                thisWeekCount: result.thisWeek.length,
+                kidsCount: result.kids.length,
+                homeCount: result.home.length,
+                errandsCount: result.errands.length,
+                mealsCount: result.meals.length,
+                messagesCount: result.messages.length,
+                holdingForLaterCount: result.holdingForLater.length,
+                workCount: result.work?.length || 0,
+                taskMetaCount: result.taskMeta?.length || 0,
+                trackingItemsCount: result.trackingItems?.length || 0,
+              },
+              'Successfully organized brain dump',
+            );
+
+            return reply.status(200).send(result);
+          } catch (error) {
+            lastError = error;
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            const isAbortError = error instanceof Error && error.name === 'AbortError';
+            app.logger.error(
+              {
+                error,
+                errorMsg,
+                stack: error instanceof Error ? error.stack : undefined,
+                isAbortError,
+                attempt,
+              },
+              'organize_call_failed',
+            );
+
+            if (!isRateLimitError(error)) {
+              // Not a rate limit error, fail immediately
+              break;
+            }
+
+            if (attempt < 4) {
+              // Wait before retrying with exponential backoff: 3s, 6s, 12s, 24s
+              const delayMs = Math.pow(3, attempt + 1) * 1000;
+              app.logger.warn(
+                { attempt: attempt + 1, delayMs, err: error },
+                'Rate limited, retrying',
+              );
+              await new Promise(resolve => setTimeout(resolve, delayMs));
             } else {
-              app.logger.error({ content: responseContent.slice(0, 500) }, 'Failed to parse JSON from OpenRouter');
-              throw parseErr;
+              // Out of retries
+              app.logger.warn(
+                { attempts: attempt + 1, err: error, textLength: trimmedText.length },
+                'Rate limit exceeded after retries',
+              );
+              return reply.status(429).send({
+                error: 'rate_limited',
+                message: 'Mom Brain needs a minute to catch up. Try again shortly.',
+              });
             }
           }
-
-          // Ensure new fields exist with safe defaults
-          parsed.work = parsed.work || [];
-          parsed.taskMeta = parsed.taskMeta || [];
-          parsed.trackingItems = parsed.trackingItems || [];
-          parsed.rhythmInsights = parsed.rhythmInsights || {
-            topCategories: [],
-            recurringThemes: [],
-            momCheckIn: parsed.momCheckIn || '',
-          };
-
-          // Validate against schema
-          const result = OrganizeSchema.parse(parsed);
-
-          const elapsedMs = Date.now() - startTime;
-
-          app.logger.info(
-            {
-              elapsedMs,
-              attempts: attempt + 1,
-              doTodayCount: result.doToday.length,
-              thisWeekCount: result.thisWeek.length,
-              kidsCount: result.kids.length,
-              homeCount: result.home.length,
-              errandsCount: result.errands.length,
-              mealsCount: result.meals.length,
-              messagesCount: result.messages.length,
-              holdingForLaterCount: result.holdingForLater.length,
-              workCount: result.work?.length || 0,
-              taskMetaCount: result.taskMeta?.length || 0,
-              trackingItemsCount: result.trackingItems?.length || 0,
-            },
-            'Successfully organized brain dump',
-          );
-
-          return reply.status(200).send(result);
-        } catch (error) {
-          lastError = error;
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          const isAbortError = error instanceof Error && error.name === 'AbortError';
-          app.logger.error(
-            {
-              error,
-              errorMsg,
-              stack: error instanceof Error ? error.stack : undefined,
-              isAbortError,
-              attempt,
-            },
-            'organize_call_failed',
-          );
-
-          if (!isRateLimitError(error)) {
-            // Not a rate limit error, fail immediately
-            break;
-          }
-
-          if (attempt < 4) {
-            // Wait before retrying with exponential backoff: 3s, 6s, 12s, 24s
-            const delayMs = Math.pow(3, attempt + 1) * 1000;
-            app.logger.warn(
-              { attempt: attempt + 1, delayMs, err: error },
-              'Rate limited, retrying',
-            );
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-          } else {
-            // Out of retries
-            app.logger.warn(
-              { attempts: attempt + 1, err: error, textLength: trimmedText.length },
-              'Rate limit exceeded after retries',
-            );
-            return reply.status(429).send({
-              error: 'rate_limited',
-              message: 'Mom Brain needs a minute to catch up. Try again shortly.',
-            });
-          }
         }
-      }
 
         // If we reach here, we failed after all retries
         const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);

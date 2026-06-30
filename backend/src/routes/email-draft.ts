@@ -85,6 +85,8 @@ export function register(app: App, fastify: FastifyInstance) {
         const apiKey = process.env.OPENROUTER_API_KEY;
         const isTestMode = !apiKey;
 
+        app.logger.debug({ hasKey: !!apiKey, keyLength: apiKey?.length || 0 }, 'openrouter_key_check');
+
         if (isTestMode) {
           app.logger.info({ context }, 'email_draft_test_mode');
           const mockSubjects: Record<string, string> = {
