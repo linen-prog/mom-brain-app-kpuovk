@@ -1,41 +1,12 @@
 // redeploy to pick up OPENROUTER_API_KEY
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { generateText } from 'ai';
+import { gateway } from '@specific-dev/framework';
 import type { App } from '../index.js';
 
-interface Kid {
-  name: string;
-  age?: number;
-  grade?: string;
-  nicknames?: string[];
-}
-
-interface OrganizeRequestBody {
-  text: string;
-  kids?: Kid[];
-  partnerName?: string;
-}
-
-interface TaskMeta {
-  taskText: string;
-  category: 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work' | 'holdingForLater';
-  childName: string | null;
-  delegation: 'me' | 'partner' | 'coparent' | 'kid';
-  isPartnerTask: boolean;
-}
-
-interface TrackingItem {
-  id: string;
-  text: string;
-  dueDate: string | null;
-  category: string;
-}
-
-interface RhythmInsight {
-  topCategories: string[];
-  recurringThemes: string[];
-  momCheckIn: string;
-}
+interface Kid { name: string; age?: number; grade?: string; nicknames?: string[]; }
+interface OrganizeRequestBody { text: string; kids?: Kid[]; partnerName?: string; }
 
 const OrganizeSchema = z.object({
   doToday: z.array(z.string()),
@@ -50,9 +21,9 @@ const OrganizeSchema = z.object({
   momCheckIn: z.string().min(1),
   taskMeta: z.array(z.object({
     taskText: z.string(),
-    category: z.enum(['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work', 'holdingForLater']),
+    category: z.enum(['doToday','thisWeek','kids','home','errands','meals','messages','work','holdingForLater']),
     childName: z.string().nullable(),
-    delegation: z.enum(['me', 'partner', 'coparent', 'kid']),
+    delegation: z.enum(['me','partner','coparent','kid']),
     isPartnerTask: z.boolean(),
   })).optional(),
   trackingItems: z.array(z.object({
@@ -67,8 +38,6 @@ const OrganizeSchema = z.object({
     momCheckIn: z.string(),
   }).optional(),
 });
-
-type OrganizeResponse = z.infer<typeof OrganizeSchema>;
 
 const SYSTEM_PROMPT = `You are a compassionate AI assistant helping a busy mom organize her mental load. Parse the brain dump text and return a JSON object with these exact fields.
 
@@ -92,36 +61,29 @@ KID-AWARE PARSING (if kids array provided):
 
 DELEGATION DETECTION:
 - "remind [name] to...", "[name] needs to...", "ask [name] to...", "[name] should..." patterns
-- If name matches partnerName → delegation: "partner", isPartnerTask: true
-- If it's a co-parent reference (e.g. "their dad", "ex") → delegation: "coparent", isPartnerTask: true
-- If it's a child's name → delegation: "kid", isPartnerTask: false
-- Default → delegation: "me", isPartnerTask: false
-- COLLISION RULE: If a name matches BOTH a child's name AND the partner name, default to the child interpretation (delegation: 'kid') unless the phrase is unambiguously adult in context (e.g. 'remind my husband Jake', 'ask Jake about the mortgage'). Never assign delegation: 'partner' based solely on a name match — require adult-context phrasing.
+- If name matches partnerName: delegation "partner", isPartnerTask true
+- If co-parent reference: delegation "coparent", isPartnerTask true
+- If child name: delegation "kid", isPartnerTask false
+- Default: delegation "me", isPartnerTask false
+- COLLISION RULE: If a name matches BOTH a child name AND the partner name, default to child interpretation (delegation "kid") unless the phrase is unambiguously adult (e.g. "remind my husband Jake", "ask Jake about the mortgage"). Never assign delegation "partner" based solely on a name match.
 
-TRACKING ITEMS (extract these as trackingItems, NOT as regular tasks):
-- Phrases like: "I need to remember that...", "coming up...", "starting next month...", "don't forget...", "keep an eye on...", "permission slip due...", "refill in...", "size change soon..."
-- Include dueDate (ISO 8601) if a date is mentioned, otherwise null
+TRACKING ITEMS (extract as trackingItems, NOT regular tasks):
+- Phrases: "I need to remember that...", "coming up...", "starting next month...", "don't forget...", "keep an eye on...", "permission slip due...", "refill in...", "size change soon..."
+- Include dueDate (ISO 8601) if date mentioned, otherwise null
 - Generate a UUID for each id
 
 RHYTHM INSIGHTS:
 - topCategories: top 2-3 categories by item count
-- recurringThemes: themes you detect (e.g. "school logistics", "medical appointments", "meal planning")
+- recurringThemes: themes detected
 - momCheckIn: same as top-level momCheckIn
 
-IMPORTANT: Return valid JSON only. If taskMeta/trackingItems/rhythmInsights cannot be computed, return empty arrays and defaults rather than erroring. All existing fields (doToday, thisWeek, etc.) must remain identical.`;
+IMPORTANT: Return valid JSON only. If taskMeta/trackingItems/rhythmInsights cannot be computed, return empty arrays and defaults.`;
 
 function isRateLimitError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as any;
-  if (e.statusCode === 429) return true;
-  if (e.status === 429) return true;
-  if (e.name === 'GatewayRateLimitError') return true;
-  if (typeof e.message === 'string') {
-    const msg = e.message.toLowerCase();
-    if (msg.includes('rate')) return true;
-    if (msg.includes('429')) return true;
-    if (msg.includes('too many requests')) return true;
-  }
+  if (e.statusCode === 429 || e.status === 429) return true;
+  if (typeof e.message === 'string' && (e.message.includes('rate') || e.message.includes('429'))) return true;
   return false;
 }
 
@@ -130,254 +92,58 @@ export function register(app: App, fastify: FastifyInstance) {
     '/api/organize',
     {
       schema: {
-        description: 'Organize a brain dump into categories',
-        tags: ['organize'],
-        body: {
-          type: 'object',
-          required: ['text'],
-          properties: {
-            text: { type: 'string', description: 'Raw brain dump text to organize' },
-            kids: {
-              type: 'array',
-              description: 'Optional array of child information',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  age: { type: 'number' },
-                  grade: { type: 'string' },
-                  nicknames: { type: 'array', items: { type: 'string' } },
-                },
-              },
-            },
-            partnerName: { type: 'string', description: 'Optional partner/spouse name' },
-          },
-        },
-        response: {
-          200: {
-            description: 'Successfully organized brain dump',
-            type: 'object',
-            required: [
-              'doToday',
-              'thisWeek',
-              'kids',
-              'home',
-              'errands',
-              'meals',
-              'messages',
-              'holdingForLater',
-              'momCheckIn',
-            ],
-            properties: {
-              doToday: { type: 'array', items: { type: 'string' } },
-              thisWeek: { type: 'array', items: { type: 'string' } },
-              kids: { type: 'array', items: { type: 'string' } },
-              home: { type: 'array', items: { type: 'string' } },
-              errands: { type: 'array', items: { type: 'string' } },
-              meals: { type: 'array', items: { type: 'string' } },
-              messages: { type: 'array', items: { type: 'string' } },
-              holdingForLater: { type: 'array', items: { type: 'string' } },
-              work: { type: 'array', items: { type: 'string' } },
-              momCheckIn: { type: 'string' },
-              taskMeta: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    taskText: { type: 'string' },
-                    category: {
-                      type: 'string',
-                      enum: ['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work', 'holdingForLater'],
-                    },
-                    childName: { type: 'string', nullable: true },
-                    delegation: { type: 'string', enum: ['me', 'partner', 'coparent', 'kid'] },
-                    isPartnerTask: { type: 'boolean' },
-                  },
-                },
-              },
-              trackingItems: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    text: { type: 'string' },
-                    dueDate: { type: 'string', nullable: true },
-                    category: { type: 'string' },
-                  },
-                },
-              },
-              rhythmInsights: {
-                type: 'object',
-                properties: {
-                  topCategories: { type: 'array', items: { type: 'string' } },
-                  recurringThemes: { type: 'array', items: { type: 'string' } },
-                  momCheckIn: { type: 'string' },
-                },
-              },
-            },
-          },
-          400: {
-            description: 'Missing or empty text',
-            type: 'object',
-            properties: {
-              error: { type: 'string' },
-            },
-          },
-          429: {
-            description: 'Rate limit exceeded',
-            type: 'object',
-            properties: {
-              error: { type: 'string' },
-              message: { type: 'string' },
-            },
-          },
-          500: {
-            description: 'AI processing failed',
-            type: 'object',
-            properties: {
-              error: { type: 'string' },
-              message: { type: 'string' },
-            },
-          },
-        },
+        body: { type: 'object', required: ['text'], properties: { text: { type: 'string' }, kids: { type: 'array', items: { type: 'object' } }, partnerName: { type: 'string' } } },
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      if (!process.env.OPENROUTER_API_KEY) {
-        const mockResponse: OrganizeResponse = {
-          doToday: ['Buy milk', 'Schedule dentist appointment'],
-          thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-          kids: [],
-          home: ['Fix the kitchen sink'],
-          errands: ['Buy milk'],
-          meals: ['Plan weekly menu'],
-          messages: ['Call mom'],
-          holdingForLater: [],
-          momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-        };
-        reply.status(200);
-        return mockResponse;
+      const { text, kids, partnerName } = request.body;
+      app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize');
+
+      if (!text || text.trim().length === 0) {
+        return reply.status(400).send({ error: 'text is required' });
       }
 
-      try {
-        const body = request.body as any;
+      const startTime = Date.now();
+      const trimmedText = text.trim();
+      const kidsInfo = kids ? '\n\nChildren:\n' + kids.map((k: Kid) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.nicknames?.length ? ` (nicknames: ${k.nicknames.join(', ')})` : ''}`).join('\n') : '';
+      const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
 
-        if (!body?.text?.trim()) {
-          return reply.status(400).send({ error: 'text is required' });
-        }
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const { text: responseContent } = await generateText({
+            model: gateway('google/gemini-2.5-flash'),
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON with all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work, momCheckIn, taskMeta, trackingItems, rhythmInsights.` },
+            ],
+          });
 
-        const { text, kids, partnerName } = body;
-        const trimmedText = text.trim();
-        const apiKey = process.env.OPENROUTER_API_KEY;
+          let parsed: any;
+          const jsonMatch = responseContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          parsed = JSON.parse(jsonMatch ? jsonMatch[1] : responseContent);
 
-        let lastError: unknown;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          try {
-            // API call attempt
-            const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k: any) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
-            const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
+          parsed.work = parsed.work || [];
+          parsed.taskMeta = parsed.taskMeta || [];
+          parsed.trackingItems = parsed.trackingItems || [];
+          parsed.rhythmInsights = parsed.rhythmInsights || { topCategories: [], recurringThemes: [], momCheckIn: parsed.momCheckIn || '' };
 
-            const requestBody = {
-              model: 'google/gemini-2.5-flash',
-              messages: [
-                {
-                  role: 'system',
-                  content: SYSTEM_PROMPT,
-                },
-                {
-                  role: 'user',
-                  content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON. Include all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work (all arrays of strings), momCheckIn (string), taskMeta (array), trackingItems (array), rhythmInsights (object). If you cannot extract certain metadata, return empty arrays/defaults for those fields.`,
-                },
-              ],
-            };
-
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 60000);
-
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://mombrain.app',
-                'X-Title': 'Mom Brain',
-              },
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            });
-
-            clearTimeout(timeout);
-
-            if (response.status === 429) {
-              const error = new Error('Rate limited');
-              (error as any).statusCode = 429;
-              throw error;
-            }
-
-            if (!response.ok) {
-              throw new Error(`OpenRouter error ${response.status}`);
-            }
-
-            const data = await response.json() as any;
-            const content = data.choices?.[0]?.message?.content;
-
-            if (!content) {
-              throw new Error('No content in response');
-            }
-
-            let parsed: any;
-            try {
-              parsed = JSON.parse(content);
-            } catch {
-              const match = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-              if (match) {
-                parsed = JSON.parse(match[1]);
-              } else {
-                throw new Error('Failed to parse JSON');
-              }
-            }
-
-            parsed.work = parsed.work || [];
-            parsed.taskMeta = parsed.taskMeta || [];
-            parsed.trackingItems = parsed.trackingItems || [];
-            parsed.rhythmInsights = parsed.rhythmInsights || {
-              topCategories: [],
-              recurringThemes: [],
-              momCheckIn: parsed.momCheckIn || '',
-            };
-
-            const result = OrganizeSchema.parse(parsed);
-            return reply.status(200).send(result);
-          } catch (error) {
-            lastError = error;
-            if (!isRateLimitError(error)) {
-              break;
-            }
-            if (attempt < 4) {
-              await new Promise(resolve => setTimeout(resolve, Math.pow(3, attempt + 1) * 1000));
-            } else {
-              return reply.status(429).send({
-                error: 'rate_limited',
-                message: 'Mom Brain needs a minute to catch up. Try again shortly.',
-              });
-            }
+          const result = OrganizeSchema.parse(parsed);
+          app.logger.info({ elapsedMs: Date.now() - startTime, attempts: attempt + 1 }, 'Successfully organized brain dump');
+          return reply.status(200).send(result);
+        } catch (error) {
+          lastError = error;
+          app.logger.error({ error, attempt }, 'organize_call_failed');
+          if (!isRateLimitError(error)) break;
+          if (attempt < 4) {
+            await new Promise(resolve => setTimeout(resolve, Math.pow(3, attempt + 1) * 1000));
+          } else {
+            return reply.status(429).send({ error: 'rate_limited', message: 'Mom Brain needs a minute to catch up. Try again shortly.' });
           }
         }
 
-        return reply.status(500).send({
-          error: 'server_error',
-          message: 'Something got tangled. Try again.',
-        });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        const errStack = err instanceof Error ? err.stack : undefined;
-        app.logger.error({ err, errMsg, errStack, errKeys: Object.keys(err || {}) }, 'organize_handler_error');
-        return reply.status(500).send({
-          error: 'server_error',
-          message: 'Something got tangled. Try again.',
-        });
-      }
+      app.logger.error({ err: lastError }, 'Failed to organize');
+      return reply.status(500).send({ error: 'server_error', message: 'Something got tangled. Try again.' });
     },
   );
 }
