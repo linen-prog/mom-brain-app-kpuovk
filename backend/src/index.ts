@@ -21,3 +21,12 @@ rhythmRecapRoutes.register(app, app.fastify);
 
 await app.run();
 app.logger.info('Application running');
+
+const apiKey = process.env.OPENROUTER_API_KEY;
+app.logger.info(
+  {
+    hasKey: !!apiKey,
+    keyPrefix: apiKey ? apiKey.substring(0, 8) : 'MISSING',
+  },
+  'startup_env_check',
+);

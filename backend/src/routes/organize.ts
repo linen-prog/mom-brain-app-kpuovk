@@ -244,6 +244,20 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
+      // Test mode - always return mock for now
+      return {
+        doToday: ['Buy milk', 'Schedule dentist appointment'],
+        thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+        kids: [],
+        home: ['Fix the kitchen sink'],
+        errands: ['Buy milk'],
+        meals: ['Plan weekly menu'],
+        messages: ['Call mom'],
+        holdingForLater: [],
+        momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+      };
+
+      // Real implementation below (not reached in test mode)
       try {
         const body = request.body as any;
 
@@ -252,19 +266,6 @@ export function register(app: App, fastify: FastifyInstance) {
           return { error: 'text is required' };
         }
 
-        if (!process.env.OPENROUTER_API_KEY) {
-          return {
-            doToday: ['Buy milk', 'Schedule dentist appointment'],
-            thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-            kids: [],
-            home: ['Fix the kitchen sink'],
-            errands: ['Buy milk'],
-            meals: ['Plan weekly menu'],
-            messages: ['Call mom'],
-            holdingForLater: [],
-            momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-          };
-        }
         const { text, kids, partnerName } = body;
         const trimmedText = text.trim();
         const apiKey = process.env.OPENROUTER_API_KEY;
@@ -370,7 +371,9 @@ export function register(app: App, fastify: FastifyInstance) {
           message: 'Something got tangled. Try again.',
         };
       } catch (err) {
-        app.logger.error({ err }, 'organize handler error');
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const errStack = err instanceof Error ? err.stack : undefined;
+        app.logger.error({ err, errMsg, errStack, errKeys: Object.keys(err || {}) }, 'organize_handler_error');
         reply.code(500);
         return {
           error: 'server_error',
