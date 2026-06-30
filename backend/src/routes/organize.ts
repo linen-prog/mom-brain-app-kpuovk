@@ -244,130 +244,139 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      const body = request.body as any;
-      if (!body?.text?.trim()) {
-        reply.code(400);
-        return { error: 'text is required' };
-      }
+      try {
+        const body = request.body as any;
 
-      if (!process.env.OPENROUTER_API_KEY) {
-        return {
-          doToday: ['Buy milk', 'Schedule dentist appointment'],
-          thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-          kids: [],
-          home: ['Fix the kitchen sink'],
-          errands: ['Buy milk'],
-          meals: ['Plan weekly menu'],
-          messages: ['Call mom'],
-          holdingForLater: [],
-          momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-        };
-      }
+        if (!body?.text?.trim()) {
+          reply.code(400);
+          return { error: 'text is required' };
+        }
 
-      const { text, kids, partnerName } = body;
-      const trimmedText = text.trim();
-      const startTime = Date.now();
-      const apiKey = process.env.OPENROUTER_API_KEY;
-
-      let lastError: unknown;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k: any) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
-          const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
-
-          const requestBody = {
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              {
-                role: 'system',
-                content: SYSTEM_PROMPT,
-              },
-              {
-                role: 'user',
-                content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON. Include all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work (all arrays of strings), momCheckIn (string), taskMeta (array), trackingItems (array), rhythmInsights (object). If you cannot extract certain metadata, return empty arrays/defaults for those fields.`,
-              },
-            ],
+        if (!process.env.OPENROUTER_API_KEY) {
+          return {
+            doToday: ['Buy milk', 'Schedule dentist appointment'],
+            thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+            kids: [],
+            home: ['Fix the kitchen sink'],
+            errands: ['Buy milk'],
+            meals: ['Plan weekly menu'],
+            messages: ['Call mom'],
+            holdingForLater: [],
+            momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
           };
+        }
+        const { text, kids, partnerName } = body;
+        const trimmedText = text.trim();
+        const apiKey = process.env.OPENROUTER_API_KEY;
 
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 60000);
-
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://mombrain.app',
-              'X-Title': 'Mom Brain',
-            },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeout);
-
-          if (response.status === 429) {
-            const error = new Error('Rate limited');
-            (error as any).statusCode = 429;
-            throw error;
-          }
-
-          if (!response.ok) {
-            throw new Error(`OpenRouter error ${response.status}`);
-          }
-
-          const data = await response.json() as any;
-          const content = data.choices?.[0]?.message?.content;
-
-          if (!content) {
-            throw new Error('No content in response');
-          }
-
-          let parsed: any;
+        let lastError: unknown;
+        for (let attempt = 0; attempt < 5; attempt++) {
           try {
-            parsed = JSON.parse(content);
-          } catch {
-            const match = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (match) {
-              parsed = JSON.parse(match[1]);
+            // API call attempt
+            const kidsInfo = kids ? `\n\nChildren:\n${kids.map((k: any) => `- ${k.name}${k.age ? ` (age ${k.age})` : ''}${k.grade ? ` (${k.grade})` : ''}${k.nicknames?.length ? ` (${k.nicknames.join(', ')})` : ''}`).join('\n')}` : '';
+            const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
+
+            const requestBody = {
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                {
+                  role: 'system',
+                  content: SYSTEM_PROMPT,
+                },
+                {
+                  role: 'user',
+                  content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON. Include all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work (all arrays of strings), momCheckIn (string), taskMeta (array), trackingItems (array), rhythmInsights (object). If you cannot extract certain metadata, return empty arrays/defaults for those fields.`,
+                },
+              ],
+            };
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 60000);
+
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://mombrain.app',
+                'X-Title': 'Mom Brain',
+              },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
+
+            clearTimeout(timeout);
+
+            if (response.status === 429) {
+              const error = new Error('Rate limited');
+              (error as any).statusCode = 429;
+              throw error;
+            }
+
+            if (!response.ok) {
+              throw new Error(`OpenRouter error ${response.status}`);
+            }
+
+            const data = await response.json() as any;
+            const content = data.choices?.[0]?.message?.content;
+
+            if (!content) {
+              throw new Error('No content in response');
+            }
+
+            let parsed: any;
+            try {
+              parsed = JSON.parse(content);
+            } catch {
+              const match = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+              if (match) {
+                parsed = JSON.parse(match[1]);
+              } else {
+                throw new Error('Failed to parse JSON');
+              }
+            }
+
+            parsed.work = parsed.work || [];
+            parsed.taskMeta = parsed.taskMeta || [];
+            parsed.trackingItems = parsed.trackingItems || [];
+            parsed.rhythmInsights = parsed.rhythmInsights || {
+              topCategories: [],
+              recurringThemes: [],
+              momCheckIn: parsed.momCheckIn || '',
+            };
+
+            const result = OrganizeSchema.parse(parsed);
+            return result;
+          } catch (error) {
+            lastError = error;
+            if (!isRateLimitError(error)) {
+              break;
+            }
+            if (attempt < 4) {
+              await new Promise(resolve => setTimeout(resolve, Math.pow(3, attempt + 1) * 1000));
             } else {
-              throw new Error('Failed to parse JSON');
+              reply.code(429);
+              return {
+                error: 'rate_limited',
+                message: 'Mom Brain needs a minute to catch up. Try again shortly.',
+              };
             }
           }
-
-          parsed.work = parsed.work || [];
-          parsed.taskMeta = parsed.taskMeta || [];
-          parsed.trackingItems = parsed.trackingItems || [];
-          parsed.rhythmInsights = parsed.rhythmInsights || {
-            topCategories: [],
-            recurringThemes: [],
-            momCheckIn: parsed.momCheckIn || '',
-          };
-
-          const result = OrganizeSchema.parse(parsed);
-          return result;
-        } catch (error) {
-          lastError = error;
-          if (!isRateLimitError(error)) {
-            break;
-          }
-          if (attempt < 4) {
-            await new Promise(resolve => setTimeout(resolve, Math.pow(3, attempt + 1) * 1000));
-          } else {
-            reply.code(429);
-            return {
-              error: 'rate_limited',
-              message: 'Mom Brain needs a minute to catch up. Try again shortly.',
-            };
-          }
         }
-      }
 
-      reply.code(500);
-      return {
-        error: 'server_error',
-        message: 'Something got tangled. Try again.',
-      };
+        reply.code(500);
+        return {
+          error: 'server_error',
+          message: 'Something got tangled. Try again.',
+        };
+      } catch (err) {
+        app.logger.error({ err }, 'organize handler error');
+        reply.code(500);
+        return {
+          error: 'server_error',
+          message: 'Something got tangled. Try again.',
+        };
+      }
     },
   );
 }
