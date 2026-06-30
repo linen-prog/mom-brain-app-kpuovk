@@ -59,6 +59,7 @@ describe("API Integration Tests", () => {
       const data = await res.json();
       expect(data.doToday).toBeDefined();
       expect(data.thisWeek).toBeDefined();
+      expect(data.momCheckIn).toBeDefined();
     });
 
     test("Organize brain dump with minimal text", async () => {
@@ -108,6 +109,50 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("kids");
       expect(Array.isArray(data.kids)).toBe(true);
       expect(data).toHaveProperty("taskMeta");
+    });
+
+    test("Organize brain dump validates taskMeta structure", async () => {
+      // Add longer delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Buy milk and eggs for breakfast tomorrow, call Jane about the birthday party",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("taskMeta");
+      if (Array.isArray(data.taskMeta) && data.taskMeta.length > 0) {
+        const taskMeta = data.taskMeta[0];
+        expect(taskMeta).toHaveProperty("taskText");
+        expect(taskMeta).toHaveProperty("category");
+        expect(taskMeta).toHaveProperty("delegation");
+      }
+    });
+
+    test("Organize brain dump returns tracking items", async () => {
+      // Add longer delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Schedule dentist appointment for next month, plan summer vacation",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("trackingItems");
+      if (Array.isArray(data.trackingItems) && data.trackingItems.length > 0) {
+        const trackingItem = data.trackingItems[0];
+        expect(trackingItem).toHaveProperty("id");
+        expect(trackingItem).toHaveProperty("text");
+        expect(trackingItem).toHaveProperty("category");
+      }
     });
 
     test("Reject request with missing text field", async () => {
@@ -459,6 +504,7 @@ describe("API Integration Tests", () => {
       const data = await res.json();
       expect(data).toHaveProperty("doneThisWeek");
       expect(data).toHaveProperty("momMessage");
+      expect(data).toHaveProperty("weekLabel");
     });
 
     test("Generate weekly recap with complex tracking items", async () => {

@@ -244,37 +244,34 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      try {
-        const { text, kids, partnerName } = request.body || {};
+      const body = request.body;
+      if (!body || !body.text || body.text.trim().length === 0) {
+        reply.code(400);
+        return { error: 'text is required' };
+      }
 
-        if (!text || text.trim().length === 0) {
-          return reply.status(400).send({ error: 'text is required' });
-        }
+      const { text, kids, partnerName } = body;
+      const trimmedText = text.trim();
+
+      // Check for test mode - return immediately if no API key
+      if (!process.env.OPENROUTER_API_KEY) {
+        return {
+          doToday: ['Buy milk', 'Schedule dentist appointment'],
+          thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+          kids: [],
+          home: ['Fix the kitchen sink'],
+          errands: ['Buy milk'],
+          meals: ['Plan weekly menu'],
+          messages: ['Call mom'],
+          holdingForLater: [],
+          momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+        };
+      }
+
+      try {
 
         const startTime = Date.now();
-        const trimmedText = text.trim();
-
-        // Check for test mode BEFORE entering retry loop
         const apiKey = process.env.OPENROUTER_API_KEY;
-        const isTestMode = !apiKey;
-
-        app.logger.debug({ hasKey: !!apiKey, keyLength: apiKey?.length || 0 }, 'openrouter_key_check');
-        app.logger.debug({ isTestMode, hasApiKey: !!apiKey }, 'Mode check');
-
-        if (isTestMode) {
-          app.logger.info({ textLength: trimmedText.length }, 'organize_test_mode_mock_response');
-          return {
-            doToday: ['Buy milk', 'Schedule dentist appointment'],
-            thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-            kids: [],
-            home: ['Fix the kitchen sink'],
-            errands: ['Buy milk'],
-            meals: ['Plan weekly menu'],
-            messages: ['Call mom'],
-            holdingForLater: [],
-            momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-          };
-        }
 
         // Retry logic for rate limits with exponential backoff (only for real API calls)
         let lastError: unknown;
