@@ -155,6 +155,28 @@ describe("API Integration Tests", () => {
       }
     });
 
+    test("Organize brain dump returns rhythm insights", async () => {
+      // Add longer delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Fix fence, buy groceries, help with homework, call mom, dentist appointment",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("rhythmInsights");
+      if (data.rhythmInsights) {
+        expect(data.rhythmInsights).toHaveProperty("topCategories");
+        expect(data.rhythmInsights).toHaveProperty("recurringThemes");
+        expect(Array.isArray(data.rhythmInsights.topCategories)).toBe(true);
+        expect(Array.isArray(data.rhythmInsights.recurringThemes)).toBe(true);
+      }
+    });
+
     test("Reject request with missing text field", async () => {
       const res = await api("/api/organize", {
         method: "POST",

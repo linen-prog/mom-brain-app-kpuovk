@@ -244,20 +244,22 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      // Test mode - always return mock for now
-      return {
-        doToday: ['Buy milk', 'Schedule dentist appointment'],
-        thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-        kids: [],
-        home: ['Fix the kitchen sink'],
-        errands: ['Buy milk'],
-        meals: ['Plan weekly menu'],
-        messages: ['Call mom'],
-        holdingForLater: [],
-        momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-      };
+      const hasApiKey = !!process.env.OPENROUTER_API_KEY;
 
-      // Real implementation below (not reached in test mode)
+      if (!hasApiKey) {
+        return {
+          doToday: ['Buy milk', 'Schedule dentist appointment'],
+          thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+          kids: [],
+          home: ['Fix the kitchen sink'],
+          errands: ['Buy milk'],
+          meals: ['Plan weekly menu'],
+          messages: ['Call mom'],
+          holdingForLater: [],
+          momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+        };
+      }
+
       try {
         const body = request.body as any;
 
