@@ -5,6 +5,7 @@ import * as organizeRoutes from './routes/organize.js';
 import * as transcribeRoutes from './routes/transcribe.js';
 import * as emailDraftRoutes from './routes/email-draft.js';
 import * as rhythmRecapRoutes from './routes/rhythm-recap.js';
+import * as organizeImageRoutes from './routes/organize-image.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -18,6 +19,7 @@ organizeRoutes.register(app, app.fastify);
 transcribeRoutes.register(app, app.fastify);
 emailDraftRoutes.register(app, app.fastify);
 rhythmRecapRoutes.register(app, app.fastify);
+organizeImageRoutes.register(app, app.fastify);
 
 await app.run();
 app.logger.info('Application running');

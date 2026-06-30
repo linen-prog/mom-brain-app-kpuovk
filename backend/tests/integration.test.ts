@@ -663,4 +663,268 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("error");
     });
   });
+
+  describe("POST /api/organize-image", () => {
+    test("Organize image with valid base64 screenshot", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      // Create a simple 1x1 pixel PNG in base64
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toBeDefined();
+      // Response may indicate no actionable content or actual content
+      if (data.noActionableContent !== undefined) {
+        expect(typeof data.noActionableContent).toBe("boolean");
+      }
+    });
+
+    test("Organize image with multiple images", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toBeDefined();
+    });
+
+    test("Organize image with JPEG format", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const jpegBase64 = "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8VAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA8A/9k=";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: jpegBase64,
+              mimeType: "image/jpeg",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toBeDefined();
+    });
+
+    test("Organize image with kids and partner info", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+          ],
+          kids: [
+            {
+              name: "Emma",
+              age: 8,
+              grade: "3rd",
+              nicknames: ["Em", "Emmy"],
+            },
+            {
+              name: "Lucas",
+              age: 6,
+              grade: "1st",
+            },
+          ],
+          partnerName: "John",
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toBeDefined();
+    });
+
+    test("Organize image with three images (max)", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+            {
+              base64: pngBase64,
+              mimeType: "image/png",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toBeDefined();
+    });
+
+    test("Reject request with missing images field", async () => {
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with empty images array", async () => {
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing base64 in image", async () => {
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              mimeType: "image/png",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing mimeType in image", async () => {
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: pngBase64,
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with empty base64", async () => {
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: "",
+              mimeType: "image/png",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with invalid base64", async () => {
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: "not-valid-base64!!!",
+              mimeType: "image/png",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with invalid mimeType", async () => {
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const res = await api("/api/organize-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: [
+            {
+              base64: pngBase64,
+              mimeType: "text/plain",
+            },
+          ],
+        }),
+      });
+      await expectStatus(res, 400);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+  });
 });
