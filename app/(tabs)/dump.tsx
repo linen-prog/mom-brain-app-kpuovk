@@ -11,19 +11,30 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   useAudioRecorder,
   useAudioRecorderState,
-  AudioModule,
   RecordingPresets,
   setAudioModeAsync,
 } from 'expo-audio';
 import { Colors, CategoryColors } from '@/constants/Colors';
 import { organizeText, OrganizeError, OrganizeResponse } from '@/utils/api';
-import { getLatestDump, saveLatestDump, OrganizedDump } from '@/utils/storage';
+import {
+  getLatestDump,
+  saveLatestDump,
+  OrganizedDump,
+  getKids,
+  getPartnerName,
+  KidProfile,
+  TaskMeta,
+  TrackingItem,
+} from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -37,9 +48,9 @@ type VoiceState = 'idle' | 'recording' | 'transcribing' | 'permission_needed';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function normalizeResponse(r: any): OrganizeResponse {
-  const arr = (v: any) =>
-    Array.isArray(v) ? v.filter((x: any) => typeof x === 'string' && x.trim().length > 0) : [];
+function normalizeResponse(r: OrganizeResponse): OrganizeResponse {
+  const arr = (v: unknown) =>
+    Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && (x as string).trim().length > 0) as string[] : [];
   return {
     doToday: arr(r?.doToday),
     thisWeek: arr(r?.thisWeek),
@@ -53,6 +64,9 @@ function normalizeResponse(r: any): OrganizeResponse {
       typeof r?.momCheckIn === 'string' && r.momCheckIn.trim().length > 0
         ? r.momCheckIn.trim()
         : FALLBACK_CHECK_IN,
+    taskMeta: Array.isArray(r?.taskMeta) ? r.taskMeta : undefined,
+    trackingItems: Array.isArray(r?.trackingItems) ? r.trackingItems : undefined,
+    rhythmInsights: r?.rhythmInsights,
   };
 }
 
@@ -82,6 +96,15 @@ function countAllItems(dump: OrganizedDump): number {
   );
 }
 
+function formatDueDate(dueDate: string): string {
+  try {
+    const d = new Date(dueDate);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return dueDate;
+  }
+}
+
 // ─── Waveform bar component ───────────────────────────────────────────────────
 function WaveformBars({ barAnims }: { barAnims: Animated.Value[] }) {
   return (
@@ -106,11 +129,19 @@ function WaveformBars({ barAnims }: { barAnims: Animated.Value[] }) {
 
 export default function DumpScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OrganizedDump | null>(null);
   const [lastOrganized, setLastOrganized] = useState<string | null>(null);
+
+  // Kids / partner context
+  const [kids, setKids] = useState<KidProfile[]>([]);
+  const [partnerName, setPartnerName] = useState<string | null>(null);
+
+  // Partner tasks modal
+  const [partnerModalVisible, setPartnerModalVisible] = useState(false);
 
   // Voice state
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -135,7 +166,7 @@ export default function DumpScreen() {
   ).current;
   const barLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // ── Load saved dump ──────────────────────────────────────────────────────
+  // ── Load saved dump + kids + partner ────────────────────────────────────
   useEffect(() => {
     getLatestDump().then((dump) => {
       if (dump) {
@@ -144,6 +175,8 @@ export default function DumpScreen() {
         resultsOpacity.setValue(1);
       }
     });
+    getKids().then(setKids);
+    getPartnerName().then(setPartnerName);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helper fade ──────────────────────────────────────────────────────────
@@ -156,21 +189,13 @@ export default function DumpScreen() {
     }).start();
   }, [hasText, helperOpacity]);
 
-  // ── Pulse animation for recording state (opacity only, no scale) ────────
+  // ── Pulse animation for recording state ─────────────────────────────────
   useEffect(() => {
     if (voiceState === 'recording') {
       const loop = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 0.85,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 0.85, duration: 700, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
         ])
       );
       pulseLoopRef.current = loop;
@@ -179,9 +204,7 @@ export default function DumpScreen() {
       pulseLoopRef.current?.stop();
       pulseAnim.setValue(1);
     }
-    return () => {
-      pulseLoopRef.current?.stop();
-    };
+    return () => { pulseLoopRef.current?.stop(); };
   }, [voiceState, pulseAnim]);
 
   // ── Waveform animation for transcribing state ────────────────────────────
@@ -192,16 +215,8 @@ export default function DumpScreen() {
         Animated.loop(
           Animated.sequence([
             Animated.delay(i * 110),
-            Animated.timing(anim, {
-              toValue: 1,
-              duration: 600,
-              useNativeDriver: true,
-            }),
-            Animated.timing(anim, {
-              toValue: 0.3,
-              duration: 600,
-              useNativeDriver: true,
-            }),
+            Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
           ])
         )
       );
@@ -212,9 +227,7 @@ export default function DumpScreen() {
       barLoopRef.current?.stop();
       barAnims.forEach((anim) => anim.setValue(0.3));
     }
-    return () => {
-      barLoopRef.current?.stop();
-    };
+    return () => { barLoopRef.current?.stop(); };
   }, [voiceState, barAnims]);
 
   // ── Cleanup success timer on unmount ────────────────────────────────────
@@ -229,25 +242,24 @@ export default function DumpScreen() {
     successOpacity.setValue(1);
     if (successTimerRef.current) clearTimeout(successTimerRef.current);
     successTimerRef.current = setTimeout(() => {
-      Animated.timing(successOpacity, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(successOpacity, { toValue: 0, duration: 600, useNativeDriver: true }).start();
     }, 4000);
   }, [successOpacity]);
 
   // ── Organize handler ─────────────────────────────────────────────────────
   const handleOrganize = useCallback(async () => {
     if (!text.trim()) return;
-    console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length);
+    console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length, '| kids:', kids.length, '| partner:', partnerName ?? 'none');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     setError(null);
     resultsOpacity.setValue(0);
 
     try {
-      const raw = await organizeText(text.trim());
+      const raw = await organizeText(text.trim(), {
+        kids: kids.length > 0 ? kids : undefined,
+        partnerName: partnerName ?? undefined,
+      });
       const normalized = normalizeResponse(raw);
 
       const allEmpty =
@@ -275,27 +287,19 @@ export default function DumpScreen() {
         work: [],
         ...normalized,
         completed: {},
+        taskMeta: normalized.taskMeta,
+        trackingItems: normalized.trackingItems,
+        rhythmInsights: normalized.rhythmInsights,
       };
       await saveLatestDump(dump);
       setResult(dump);
       setLastOrganized(dump.createdAt);
       setText('');
 
-      Animated.timing(helperOpacity, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(helperOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+      Animated.timing(resultsOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
 
-      Animated.timing(resultsOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-
-      setTimeout(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }, 300);
+      setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 300);
     } catch (err: unknown) {
       console.error('[Dump] organize error:', err);
       if (err instanceof OrganizeError) {
@@ -312,7 +316,7 @@ export default function DumpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [text, resultsOpacity, helperOpacity]);
+  }, [text, kids, partnerName, resultsOpacity, helperOpacity]);
 
   // ── Voice: tap mic button ────────────────────────────────────────────────
   const handleMicPress = useCallback(async () => {
@@ -320,7 +324,6 @@ export default function DumpScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (voiceState === 'recording') {
-      // Stop recording
       console.log('[Voice] Stopping recording…');
       setVoiceState('transcribing');
       setVoiceError(null);
@@ -344,9 +347,7 @@ export default function DumpScreen() {
         });
         setVoiceState('idle');
         showSuccessCaption();
-        setTimeout(() => {
-          scrollRef.current?.scrollTo({ y: 0, animated: true });
-        }, 200);
+        setTimeout(() => { scrollRef.current?.scrollTo({ y: 0, animated: true }); }, 200);
       } catch (err: unknown) {
         console.error('[Voice] Error during stop/transcribe:', err);
         if (err instanceof VoiceError) {
@@ -359,12 +360,8 @@ export default function DumpScreen() {
       return;
     }
 
-    if (voiceState === 'transcribing') {
-      // Ignore taps while transcribing
-      return;
-    }
+    if (voiceState === 'transcribing') return;
 
-    // idle or permission_needed → request permission then start
     const granted = await requestMicPermission();
     if (!granted) {
       console.warn('[Voice] Microphone permission denied');
@@ -373,7 +370,6 @@ export default function DumpScreen() {
       return;
     }
 
-    // Start recording
     try {
       console.log('[Voice] Starting recording…');
       setVoiceError(null);
@@ -389,17 +385,37 @@ export default function DumpScreen() {
     }
   }, [voiceState, audioRecorder, recorderState.durationMillis, showSuccessCaption]);
 
-  // ── Stop button (inside recording card) ─────────────────────────────────
   const handleStopPress = useCallback(() => {
     console.log('[Voice] Stop button pressed');
     handleMicPress();
   }, [handleMicPress]);
 
-  // ── Open Settings ────────────────────────────────────────────────────────
   const handleOpenSettings = useCallback(() => {
     console.log('[Voice] Opening device Settings for microphone permission');
     Linking.openSettings();
   }, []);
+
+  // ── Partner tasks modal ──────────────────────────────────────────────────
+  const partnerTasks: TaskMeta[] = result?.taskMeta?.filter((m) => m.isPartnerTask) ?? [];
+  const hasPartnerTasks = partnerTasks.length > 0;
+
+  const handleOpenPartnerModal = useCallback(() => {
+    console.log('[Dump] "Things on someone else\'s plate" pressed — tasks:', partnerTasks.length);
+    setPartnerModalVisible(true);
+  }, [partnerTasks.length]);
+
+  const handleDraftEmailFromPartner = useCallback((task: TaskMeta) => {
+    console.log('[Dump] Draft email pressed for partner task:', task.taskText);
+    setPartnerModalVisible(false);
+    router.push({
+      pathname: '/email-draft',
+      params: {
+        taskText: task.taskText,
+        childName: task.childName ?? '',
+        category: task.category,
+      },
+    });
+  }, [router]);
 
   // ── Derived display values ───────────────────────────────────────────────
   const isDisabled = !text.trim() || loading;
@@ -418,7 +434,6 @@ export default function DumpScreen() {
     return `I'm holding ${n} thing${n === 1 ? '' : 's'} for you from ${relativeTime}.`;
   })();
 
-  // Mic button appearance
   const isRecording = voiceState === 'recording';
   const isTranscribing = voiceState === 'transcribing';
   const isPermissionNeeded = voiceState === 'permission_needed';
@@ -428,7 +443,6 @@ export default function DumpScreen() {
     voiceState === 'recording' ? 'Stop recording' :
     'Start voice dump';
 
-  // Voice status card copy
   const voiceCardCopy = (() => {
     if (voiceState === 'recording') return 'Listening… say it messy.';
     if (voiceState === 'transcribing') return 'Got it. Turning your words into something you can see.';
@@ -437,24 +451,12 @@ export default function DumpScreen() {
     return null;
   })();
 
-  // Error message for voice errors (uses same warm-error-card style)
-  const voiceErrorMessage = (() => {
-    if (!voiceError) return null;
-    return voiceError;
-  })();
-
-  // ── Mic button inner content ─────────────────────────────────────────────
   const micButtonInner = (() => {
-    if (isTranscribing) {
-      return <WaveformBars barAnims={barAnims} />;
-    }
-    if (isPermissionNeeded) {
-      return <IconSymbol name="mic.slash.fill" size={28} color="#FFFFFF" />;
-    }
+    if (isTranscribing) return <WaveformBars barAnims={barAnims} />;
+    if (isPermissionNeeded) return <IconSymbol name="mic.slash.fill" size={28} color="#FFFFFF" />;
     return <View style={styles.playTriangle} />;
   })();
 
-  // ── Mic button with optional rings ──────────────────────────────────────
   const micButtonNode = (() => {
     const button = (
       <TouchableOpacity
@@ -463,9 +465,7 @@ export default function DumpScreen() {
         activeOpacity={0.85}
         accessibilityLabel={micAccessibilityLabel}
       >
-        <View style={styles.micButton}>
-          {micButtonInner}
-        </View>
+        <View style={styles.micButton}>{micButtonInner}</View>
       </TouchableOpacity>
     );
 
@@ -473,20 +473,23 @@ export default function DumpScreen() {
       return (
         <Animated.View style={{ opacity: pulseAnim }}>
           <View style={styles.micRingOuter}>
-            <View style={styles.micRingMid}>
-              {button}
-            </View>
+            <View style={styles.micRingMid}>{button}</View>
           </View>
         </Animated.View>
       );
     }
 
-    return (
-      <Animated.View style={{ opacity: pulseAnim }}>
-        {button}
-      </Animated.View>
-    );
+    return <Animated.View style={{ opacity: pulseAnim }}>{button}</Animated.View>;
   })();
+
+  const trackingItems: TrackingItem[] = result?.trackingItems ?? [];
+
+  const delegationLabel = (delegation: string) => {
+    if (delegation === 'partner') return 'Partner';
+    if (delegation === 'coparent') return 'Co-parent';
+    if (delegation === 'kid') return 'Kid';
+    return delegation;
+  };
 
   return (
     <KeyboardAvoidingView
@@ -512,18 +515,15 @@ export default function DumpScreen() {
 
         {/* Input card */}
         <View style={styles.inputCard}>
-          {/* Card header */}
           <View style={styles.cardHeader}>
             <Text style={styles.sparkleIcon}>✦</Text>
             <Text style={styles.cardHeading}>Get it out of your head.</Text>
           </View>
 
-          {/* Helper subtext — fades when user types */}
           <Animated.Text style={[styles.helperSubtext, { opacity: helperOpacity }]}>
             {'Say everything—the big stuff, the small stuff, the thing you keep forgetting. It\'s all welcome here.'}
           </Animated.Text>
 
-          {/* Text input */}
           <TextInput
             style={styles.textInput}
             multiline
@@ -535,10 +535,8 @@ export default function DumpScreen() {
             editable={!loading && voiceState !== 'transcribing'}
           />
 
-          {/* Divider */}
           <View style={styles.divider} />
 
-          {/* Voice row */}
           <View style={styles.voiceRow}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol name="mic.fill" size={16} color={Colors.primaryDeepRose} />
@@ -553,35 +551,18 @@ export default function DumpScreen() {
 
         {/* Voice status card */}
         {voiceCardCopy !== null && (
-          <View
-            style={[
-              styles.voiceCard,
-              voiceState === 'permission_needed' && styles.voiceCardPermission,
-            ]}
-          >
+          <View style={[styles.voiceCard, voiceState === 'permission_needed' && styles.voiceCardPermission]}>
             <View style={styles.voiceCardRow}>
               {isTranscribing && (
-                <ActivityIndicator
-                  size="small"
-                  color={Colors.primaryDeepRose}
-                  style={styles.voiceSpinner}
-                />
+                <ActivityIndicator size="small" color={Colors.primaryDeepRose} style={styles.voiceSpinner} />
               )}
               <Text style={styles.voiceCardText}>{voiceCardCopy}</Text>
             </View>
             {voiceState === 'recording' && (
-              <PrimaryButton
-                label="Stop"
-                onPress={handleStopPress}
-                style={styles.stopButton}
-              />
+              <PrimaryButton label="Stop" onPress={handleStopPress} style={styles.stopButton} />
             )}
             {voiceState === 'permission_needed' && (
-              <TouchableOpacity
-                style={styles.settingsButton}
-                onPress={handleOpenSettings}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity style={styles.settingsButton} onPress={handleOpenSettings} activeOpacity={0.8}>
                 <Text style={styles.settingsButtonText}>Open Settings</Text>
               </TouchableOpacity>
             )}
@@ -589,13 +570,13 @@ export default function DumpScreen() {
         )}
 
         {/* Voice error card */}
-        {voiceErrorMessage !== null && (
+        {voiceError !== null && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{voiceErrorMessage}</Text>
+            <Text style={styles.errorText}>{voiceError}</Text>
           </View>
         )}
 
-        {/* Success caption — fades after 4s */}
+        {/* Success caption */}
         <Animated.Text style={[styles.successCaption, { opacity: successOpacity }]}>
           I caught your words. You can edit before organizing.
         </Animated.Text>
@@ -653,15 +634,14 @@ export default function DumpScreen() {
             <Text style={styles.resultsSubtitle}>You don't have to hold this all in your head.</Text>
             <Text style={styles.resultsSubtitleMuted}>Take a breath. It's all here now.</Text>
 
-            {result.momCheckIn ? (
-              <MomCheckInCard message={result.momCheckIn} />
-            ) : null}
+            {result.momCheckIn ? <MomCheckInCard message={result.momCheckIn} /> : null}
 
             {result.doToday.length > 0 && (
               <CategorySection
                 title="Do Today"
                 items={result.doToday}
                 accentColor={CategoryColors.doToday}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -670,6 +650,7 @@ export default function DumpScreen() {
                 title="This Week"
                 items={result.thisWeek}
                 accentColor={CategoryColors.thisWeek}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -678,6 +659,7 @@ export default function DumpScreen() {
                 title="Kids"
                 items={result.kids}
                 accentColor={CategoryColors.kids}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -686,6 +668,7 @@ export default function DumpScreen() {
                 title="Home"
                 items={result.home}
                 accentColor={CategoryColors.home}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -694,6 +677,7 @@ export default function DumpScreen() {
                 title="Errands / Groceries"
                 items={result.errands}
                 accentColor={CategoryColors.errands}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -702,6 +686,7 @@ export default function DumpScreen() {
                 title="Meals"
                 items={result.meals}
                 accentColor={CategoryColors.meals}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -710,6 +695,7 @@ export default function DumpScreen() {
                 title="Messages"
                 items={result.messages}
                 accentColor={CategoryColors.messages}
+                taskMeta={result.taskMeta}
               />
             )}
 
@@ -722,12 +708,100 @@ export default function DumpScreen() {
                   items={result.holdingForLater}
                   accentColor={CategoryColors.holdingForLater}
                   variant="parked"
+                  taskMeta={result.taskMeta}
                 />
               </View>
+            )}
+
+            {/* Things You're Tracking */}
+            {trackingItems.length > 0 && (
+              <View style={styles.trackingCard}>
+                <View style={styles.trackingHeader}>
+                  <Text style={styles.trackingIcon}>◉</Text>
+                  <Text style={styles.trackingTitle}>Things You're Tracking</Text>
+                  <View style={[styles.trackingBadge]}>
+                    <Text style={styles.trackingBadgeText}>{trackingItems.length}</Text>
+                  </View>
+                </View>
+                <Text style={styles.trackingSubtitle}>
+                  Watching, not doing — these will remind you when the time comes.
+                </Text>
+                <View style={styles.trackingList}>
+                  {trackingItems.map((item) => {
+                    const dueDateDisplay = item.dueDate ? formatDueDate(item.dueDate) : null;
+                    return (
+                      <View key={item.id} style={styles.trackingItem}>
+                        <View style={styles.trackingDot} />
+                        <Text style={styles.trackingItemText}>{item.text}</Text>
+                        {dueDateDisplay ? (
+                          <View style={styles.dueDateChip}>
+                            <Text style={styles.dueDateText}>{dueDateDisplay}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Partner tasks filter button */}
+            {hasPartnerTasks && (
+              <TouchableOpacity
+                style={styles.partnerButton}
+                onPress={handleOpenPartnerModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.partnerButtonText}>Things on someone else's plate →</Text>
+              </TouchableOpacity>
             )}
           </Animated.View>
         )}
       </ScrollView>
+
+      {/* Partner tasks modal */}
+      <Modal
+        visible={partnerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPartnerModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => {
+            console.log('[Dump] Partner modal dismissed');
+            setPartnerModalVisible(false);
+          }} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Things on someone else's plate</Text>
+            <Text style={styles.modalSubtitle}>
+              These are handled by someone else — you don't have to carry them alone.
+            </Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {partnerTasks.map((task, index) => {
+                const label = delegationLabel(task.delegation);
+                return (
+                  <View key={index} style={styles.partnerTaskRow}>
+                    <View style={styles.partnerTaskLeft}>
+                      <Text style={styles.partnerTaskText}>{task.taskText}</Text>
+                      <View style={styles.delegationChip}>
+                        <Text style={styles.delegationChipText}>{label}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.draftEmailButton}
+                      onPress={() => handleDraftEmailFromPartner(task)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.draftEmailButtonText}>Draft Email →</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -743,7 +817,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 16,
   },
-  // Header
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -769,7 +842,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginTop: -4,
   },
-  // Input card
   inputCard: {
     backgroundColor: Colors.card,
     borderRadius: 24,
@@ -879,7 +951,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Waveform bars
   waveformContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -892,7 +963,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#FFFFFF',
   },
-  // Voice status card
   voiceCard: {
     backgroundColor: Colors.primaryBlush + '18',
     borderRadius: 14,
@@ -944,7 +1014,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
-  // Helper / example card
   helperCard: {
     backgroundColor: Colors.primaryBlush + '14',
     borderRadius: 20,
@@ -994,7 +1063,6 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 4,
   },
-  // Reassurance row
   reassuranceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1063,5 +1131,179 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     fontStyle: 'italic',
     marginTop: 2,
+  },
+  // Tracking card
+  trackingCard: {
+    backgroundColor: Colors.honey + '14',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: Colors.honey + '55',
+    borderStyle: 'dashed',
+    padding: 18,
+    gap: 10,
+  },
+  trackingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trackingIcon: {
+    fontSize: 16,
+    color: Colors.honey,
+  },
+  trackingTitle: {
+    fontSize: 17,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+    flex: 1,
+  },
+  trackingBadge: {
+    backgroundColor: Colors.honey + '33',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  trackingBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textBody,
+  },
+  trackingSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  trackingList: {
+    gap: 8,
+  },
+  trackingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  trackingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.honey,
+    flexShrink: 0,
+  },
+  trackingItemText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textBody,
+    lineHeight: 20,
+  },
+  dueDateChip: {
+    backgroundColor: Colors.honey + '44',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  dueDateText: {
+    fontSize: 11,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textBody,
+  },
+  // Partner button
+  partnerButton: {
+    backgroundColor: Colors.lavender + '22',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: Colors.lavender + '55',
+    alignItems: 'center',
+  },
+  partnerButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.lavender,
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(63, 49, 44, 0.35)',
+  },
+  modalSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '75%',
+    gap: 12,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    lineHeight: 20,
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  partnerTaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 12,
+  },
+  partnerTaskLeft: {
+    flex: 1,
+    gap: 6,
+  },
+  partnerTaskText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMain,
+    lineHeight: 21,
+  },
+  delegationChip: {
+    backgroundColor: Colors.lavender + '33',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  delegationChipText: {
+    fontSize: 11,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.lavender,
+  },
+  draftEmailButton: {
+    backgroundColor: Colors.primaryDeepRose + '18',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.primaryDeepRose + '44',
+  },
+  draftEmailButtonText: {
+    fontSize: 13,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.primaryDeepRose,
   },
 });

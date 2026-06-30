@@ -1,6 +1,6 @@
 import "react-native-reanimated";
-import React, { useEffect } from "react";
-import { Stack } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -22,33 +22,42 @@ import {
   Nunito_600SemiBold,
   Nunito_700Bold,
 } from "@expo-google-fonts/nunito";
+import { getOnboardingDone } from "@/utils/storage";
 
-// Only wrap with ErrorBoundary in dev — production apps should not include it
 const DevErrorBoundary = __DEV__
   ? ErrorBoundary
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)", // Ensure any route can link back to `/`
+  initialRouteName: "(tabs)",
 };
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
     Nunito_500Medium,
     Nunito_600SemiBold,
     Nunito_700Bold,
   });
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+    if (!fontsLoaded) return;
+
+    SplashScreen.hideAsync();
+
+    getOnboardingDone().then((done) => {
+      console.log('[Layout] onboarding done:', done);
+      if (!done) {
+        router.replace("/onboarding");
+      }
+      setOnboardingChecked(true);
+    });
+  }, [fontsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
@@ -85,8 +94,9 @@ export default function RootLayout() {
           <WidgetProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <Stack>
-                {/* Main app with tabs */}
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+                <Stack.Screen name="email-draft" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style="dark" />
             </GestureHandlerRootView>

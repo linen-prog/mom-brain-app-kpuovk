@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import { TaskMeta } from '@/utils/storage';
 
 interface CategorySectionProps {
   title: string;
@@ -8,9 +9,10 @@ interface CategorySectionProps {
   accentColor: string;
   emptyHint?: string;
   variant?: 'default' | 'parked';
+  taskMeta?: TaskMeta[];
 }
 
-export function CategorySection({ title, items, accentColor, emptyHint, variant = 'default' }: CategorySectionProps) {
+export function CategorySection({ title, items, accentColor, emptyHint, variant = 'default', taskMeta }: CategorySectionProps) {
   const isParked = variant === 'parked';
   const badgeBg = accentColor + '33';
 
@@ -20,6 +22,12 @@ export function CategorySection({ title, items, accentColor, emptyHint, variant 
 
   const titleStyle = isParked ? [styles.title, styles.titleParked] : styles.title;
   const itemTextStyle = isParked ? [styles.itemText, styles.itemTextParked] : styles.itemText;
+
+  function getChildName(itemText: string): string | null {
+    if (!taskMeta) return null;
+    const meta = taskMeta.find((m) => m.taskText === itemText);
+    return meta?.childName ?? null;
+  }
 
   return (
     <View style={cardStyle}>
@@ -42,12 +50,22 @@ export function CategorySection({ title, items, accentColor, emptyHint, variant 
       {/* Items */}
       {items.length > 0 ? (
         <View style={styles.itemsList}>
-          {items.map((item, index) => (
-            <View key={index} style={styles.itemRow}>
-              <View style={[styles.bullet, { backgroundColor: accentColor }]} />
-              <Text style={itemTextStyle}>{item}</Text>
-            </View>
-          ))}
+          {items.map((item, index) => {
+            const childName = getChildName(item);
+            return (
+              <View key={index} style={styles.itemRow}>
+                <View style={[styles.bullet, { backgroundColor: accentColor }]} />
+                <View style={styles.itemContent}>
+                  <Text style={itemTextStyle}>{item}</Text>
+                  {childName ? (
+                    <View style={styles.childPill}>
+                      <Text style={styles.childPillText}>{childName}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
         </View>
       ) : (
         <Text style={styles.emptyHint}>{emptyHint ?? 'Nothing here right now.'}</Text>
@@ -133,16 +151,35 @@ const styles = StyleSheet.create({
     marginTop: 8,
     flexShrink: 0,
   },
+  itemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
   itemText: {
     fontSize: 15,
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
     lineHeight: 22,
-    flex: 1,
+    flexShrink: 1,
   },
   itemTextParked: {
     color: Colors.textBody,
     opacity: 0.85,
+  },
+  childPill: {
+    backgroundColor: Colors.honey + '33',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'center',
+  },
+  childPillText: {
+    fontSize: 11,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textBody,
   },
   emptyHint: {
     fontSize: 14,

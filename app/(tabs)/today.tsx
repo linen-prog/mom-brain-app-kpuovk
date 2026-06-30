@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Sun, Check } from 'lucide-react-native';
 import { Colors, CategoryColors } from '@/constants/Colors';
-import { getLatestDump, updateCompleted, addItemToCategory, OrganizedDump } from '@/utils/storage';
+import { getLatestDump, updateCompleted, addItemToCategory, OrganizedDump, TaskMeta } from '@/utils/storage';
 import { EmptyState } from '@/components/EmptyState';
 import { Toast } from '@/components/Toast';
 
@@ -89,6 +89,9 @@ export default function TodayScreen() {
     label: string;
     color: string;
   } | null>(null);
+
+  // Task meta for email drafting
+  const taskMeta: TaskMeta[] = dump?.taskMeta ?? [];
 
   useFocusEffect(
     useCallback(() => {
@@ -480,6 +483,10 @@ export default function TodayScreen() {
                   ((dump[categoryModal.key as keyof OrganizedDump] as string[]) ?? []).map((item: string, index: number) => {
                     const key = `${categoryModal.key}:${index}`;
                     const isChecked = !!completed[key];
+                    const showEmailButton = categoryModal.key === 'messages';
+                    const meta = taskMeta.find((m) => m.taskText === item);
+                    const showEmailForPartner = meta?.isPartnerTask === true;
+                    const showEmail = showEmailButton || showEmailForPartner;
                     return (
                       <View key={index}>
                         {index > 0 && <View style={styles.rowDivider} />}
@@ -488,9 +495,31 @@ export default function TodayScreen() {
                             checked={isChecked}
                             onToggle={() => handleToggleCategory(categoryModal.key, index)}
                           />
-                          <Text style={[styles.taskText, isChecked && styles.taskTextDone]}>
-                            {item}
-                          </Text>
+                          <View style={styles.taskRowContent}>
+                            <Text style={[styles.taskText, isChecked && styles.taskTextDone]}>
+                              {item}
+                            </Text>
+                            {showEmail && (
+                              <TouchableOpacity
+                                style={styles.draftEmailInline}
+                                onPress={() => {
+                                  console.log('[Today] "Draft Email →" pressed for item:', item, '| category:', categoryModal.key);
+                                  setCategoryModal(null);
+                                  router.push({
+                                    pathname: '/email-draft',
+                                    params: {
+                                      taskText: item,
+                                      childName: meta?.childName ?? '',
+                                      category: categoryModal.key,
+                                    },
+                                  });
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.draftEmailInlineText}>Draft Email →</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         </View>
                       </View>
                     );
@@ -861,5 +890,23 @@ const styles = StyleSheet.create({
   },
   categoryModalScroll: {
     flexGrow: 0,
+  },
+  taskRowContent: {
+    flex: 1,
+    gap: 6,
+  },
+  draftEmailInline: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.primaryDeepRose + '18',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: Colors.primaryDeepRose + '44',
+  },
+  draftEmailInlineText: {
+    fontSize: 12,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.primaryDeepRose,
   },
 });

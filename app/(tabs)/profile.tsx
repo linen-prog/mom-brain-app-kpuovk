@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,23 @@ import {
   Alert,
   Linking,
   Modal,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as StoreReview from 'expo-store-review';
 import Constants from 'expo-constants';
 import { Colors } from '@/constants/Colors';
-import { clearAllData } from '@/utils/storage';
+import {
+  clearAllData,
+  getKids,
+  saveKids,
+  getPartnerName,
+  savePartnerName,
+  KidProfile,
+} from '@/utils/storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,10 +38,7 @@ interface ProfileRowProps {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SectionCard({ title, children }: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -53,9 +61,7 @@ function ProfileRow({ label, onPress, labelColor, rightText, showChevron = true 
       </Text>
       <View style={styles.rowRight}>
         {rightText ? <Text style={styles.rowRightText}>{rightText}</Text> : null}
-        {showChevron && (
-          <Text style={styles.chevron}>›</Text>
-        )}
+        {showChevron && <Text style={styles.chevron}>›</Text>}
       </View>
     </Pressable>
   );
@@ -71,13 +77,122 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const [howItWorksVisible, setHowItWorksVisible] = useState(false);
 
-  // Auth: no auth implemented yet — always signed out
+  // Kids state
+  const [kids, setKids] = useState<KidProfile[]>([]);
+  const [kidModalVisible, setKidModalVisible] = useState(false);
+  const [editingKid, setEditingKid] = useState<KidProfile | null>(null);
+  const [kidName, setKidName] = useState('');
+  const [kidAge, setKidAge] = useState('');
+  const [kidGrade, setKidGrade] = useState('');
+  const [kidNicknames, setKidNicknames] = useState('');
+
+  // Partner name state
+  const [partnerName, setPartnerName] = useState<string | null>(null);
+  const [partnerModalVisible, setPartnerModalVisible] = useState(false);
+  const [partnerNameInput, setPartnerNameInput] = useState('');
+
   const isSignedIn = false;
   const userEmail: string | null = null;
-
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
+  // ── Load data ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    getKids().then(setKids);
+    getPartnerName().then(setPartnerName);
+  }, []);
+
+  // ── Kids handlers ────────────────────────────────────────────────────────
+
+  const openAddKid = useCallback(() => {
+    console.log('[Profile] "+ Add a child" pressed');
+    setEditingKid(null);
+    setKidName('');
+    setKidAge('');
+    setKidGrade('');
+    setKidNicknames('');
+    setKidModalVisible(true);
+  }, []);
+
+  const openEditKid = useCallback((kid: KidProfile) => {
+    console.log('[Profile] Edit kid pressed —', kid.name);
+    setEditingKid(kid);
+    setKidName(kid.name);
+    setKidAge(kid.age !== undefined ? String(kid.age) : '');
+    setKidGrade(kid.grade ?? '');
+    setKidNicknames(kid.nicknames?.join(', ') ?? '');
+    setKidModalVisible(true);
+  }, []);
+
+  const handleSaveKid = useCallback(async () => {
+    if (!kidName.trim()) return;
+    console.log('[Profile] Save kid pressed —', kidName.trim(), '| editing:', editingKid?.id ?? 'new');
+    const nicknames = kidNicknames.trim()
+      ? kidNicknames.split(',').map((n) => n.trim()).filter(Boolean)
+      : undefined;
+    const ageNum = kidAge.trim() ? parseInt(kidAge.trim(), 10) : undefined;
+
+    let updated: KidProfile[];
+    if (editingKid) {
+      updated = kids.map((k) =>
+        k.id === editingKid.id
+          ? { ...k, name: kidName.trim(), age: ageNum, grade: kidGrade.trim() || undefined, nicknames }
+          : k
+      );
+    } else {
+      const newKid: KidProfile = {
+        id: Date.now().toString(),
+        name: kidName.trim(),
+        age: ageNum,
+        grade: kidGrade.trim() || undefined,
+        nicknames,
+      };
+      updated = [...kids, newKid];
+    }
+    await saveKids(updated);
+    setKids(updated);
+    setKidModalVisible(false);
+  }, [kids, editingKid, kidName, kidAge, kidGrade, kidNicknames]);
+
+  const handleDeleteKid = useCallback(async () => {
+    if (!editingKid) return;
+    console.log('[Profile] Delete kid pressed —', editingKid.name);
+    Alert.alert(
+      `Remove ${editingKid.name}?`,
+      'This will remove them from your kids list.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[Profile] Delete kid confirmed —', editingKid.name);
+            const updated = kids.filter((k) => k.id !== editingKid.id);
+            await saveKids(updated);
+            setKids(updated);
+            setKidModalVisible(false);
+          },
+        },
+      ]
+    );
+  }, [editingKid, kids]);
+
+  // ── Partner handlers ─────────────────────────────────────────────────────
+
+  const openPartnerModal = useCallback(() => {
+    console.log('[Profile] Partner name row pressed — current:', partnerName ?? 'none');
+    setPartnerNameInput(partnerName ?? '');
+    setPartnerModalVisible(true);
+  }, [partnerName]);
+
+  const handleSavePartner = useCallback(async () => {
+    console.log('[Profile] Save partner name pressed —', partnerNameInput.trim());
+    const name = partnerNameInput.trim();
+    await savePartnerName(name);
+    setPartnerName(name || null);
+    setPartnerModalVisible(false);
+  }, [partnerNameInput]);
+
+  // ── Other handlers ───────────────────────────────────────────────────────
 
   const handleRateApp = useCallback(async () => {
     console.log('[Profile] Rate App pressed');
@@ -85,20 +200,14 @@ export default function ProfileScreen() {
     if (available) {
       await StoreReview.requestReview();
     } else {
-      Alert.alert(
-        'Rate Mom Brain',
-        'Rating will be available once Mom Brain is live in the App Store.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Rate Mom Brain', 'Rating will be available once Mom Brain is live in the App Store.', [{ text: 'OK' }]);
     }
   }, []);
 
   const handleReportProblem = useCallback(() => {
     console.log('[Profile] Report a Problem pressed');
     const subject = encodeURIComponent('Mom Brain Problem Report');
-    const body = encodeURIComponent(
-      'What happened?\n\n\nWhat screen were you on?\n\n\nDevice / App version if known:\n'
-    );
+    const body = encodeURIComponent('What happened?\n\n\nWhat screen were you on?\n\n\nDevice / App version if known:\n');
     Linking.openURL(`mailto:help@theosomatic.com?subject=${subject}&body=${body}`);
   }, []);
 
@@ -142,14 +251,9 @@ export default function ProfileScreen() {
   const handleDeleteAccount = useCallback(() => {
     console.log('[Profile] Delete Account pressed');
     if (!isSignedIn) {
-      Alert.alert(
-        'No Account Found',
-        'Account deletion will be available once you sign in. Your local data can be cleared using "Clear Saved Brain Dumps."',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('No Account Found', 'Account deletion will be available once you sign in. Your local data can be cleared using "Clear Saved Brain Dumps."', [{ text: 'OK' }]);
       return;
     }
-    // Two-step confirmation for signed-in users
     Alert.alert(
       'Delete Account?',
       'This will permanently delete your Mom Brain account and all associated data. This cannot be undone.',
@@ -159,22 +263,18 @@ export default function ProfileScreen() {
           text: 'Delete Account',
           style: 'destructive',
           onPress: () => {
-            Alert.alert(
-              'Are you sure?',
-              'Your account and all data will be permanently deleted.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Yes, Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    console.log('[Profile] Delete Account confirmed');
-                    await clearAllData();
-                    Alert.alert('Account deletion will be available before public launch.');
-                  },
+            Alert.alert('Are you sure?', 'Your account and all data will be permanently deleted.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Yes, Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  console.log('[Profile] Delete Account confirmed');
+                  await clearAllData();
+                  Alert.alert('Account deletion will be available before public launch.');
                 },
-              ]
-            );
+              },
+            ]);
           },
         },
       ]
@@ -183,23 +283,15 @@ export default function ProfileScreen() {
 
   const handleSignIn = useCallback(() => {
     console.log('[Profile] Sign In pressed');
-    Alert.alert(
-      'Sign In',
-      'Account sign-in will be available in an upcoming update. Your lists are safely stored on this device.',
-      [{ text: 'OK' }]
-    );
+    Alert.alert('Sign In', 'Account sign-in will be available in an upcoming update. Your lists are safely stored on this device.', [{ text: 'OK' }]);
   }, []);
 
   const handleSignOut = useCallback(() => {
     console.log('[Profile] Sign Out pressed');
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => {} },
-      ]
-    );
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => {} },
+    ]);
   }, []);
 
   const handleContactSupport = useCallback(() => {
@@ -218,24 +310,46 @@ export default function ProfileScreen() {
     setHowItWorksVisible(false);
   }, []);
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
   const paddingTop = insets.top + 20;
   const paddingBottom = insets.bottom + 120;
+
+  const partnerDisplayName = partnerName && partnerName.trim() ? partnerName.trim() : 'Not set';
 
   return (
     <View style={[styles.flex, { backgroundColor: Colors.background }]}>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop, paddingBottom },
-        ]}
+        contentContainerStyle={[styles.content, { paddingTop, paddingBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <Text style={styles.title}>Profile</Text>
         <Text style={styles.subtitle}>Your account, support, and settings.</Text>
+
+        {/* Kids card */}
+        <SectionCard title="Kids">
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={openAddKid}
+          >
+            <Text style={[styles.rowLabel, { color: Colors.primaryDeepRose }]}>+ Add a child</Text>
+          </Pressable>
+          {kids.map((kid, index) => {
+            const ageLabel = kid.age !== undefined ? `, age ${kid.age}` : '';
+            const kidLabel = `${kid.name}${ageLabel}`;
+            return (
+              <View key={kid.id}>
+                <RowDivider />
+                <ProfileRow
+                  label={kidLabel}
+                  onPress={() => openEditKid(kid)}
+                  rightText=""
+                  showChevron
+                />
+              </View>
+            );
+          })}
+        </SectionCard>
 
         {/* Account card */}
         <SectionCard title="Account">
@@ -260,9 +374,7 @@ export default function ProfileScreen() {
             </View>
           ) : (
             <View style={styles.accountSignedOut}>
-              <Text style={styles.accountSignedOutText}>
-                Your lists are saved on this device.
-              </Text>
+              <Text style={styles.accountSignedOutText}>Your lists are saved on this device.</Text>
               <Text style={styles.accountHelper}>
                 Sign in to keep your organized lists connected across devices.
               </Text>
@@ -274,6 +386,13 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           )}
+          <RowDivider />
+          <ProfileRow
+            label="Partner's name"
+            onPress={openPartnerModal}
+            rightText={partnerDisplayName}
+            showChevron
+          />
         </SectionCard>
 
         {/* Support card */}
@@ -293,35 +412,21 @@ export default function ProfileScreen() {
           <RowDivider />
           <ProfileRow label="Clear Saved Brain Dumps" onPress={handleClearDumps} />
           <RowDivider />
-          <ProfileRow
-            label="Delete Account"
-            onPress={handleDeleteAccount}
-            labelColor={Colors.primaryDeepRose}
-          />
+          <ProfileRow label="Delete Account" onPress={handleDeleteAccount} labelColor={Colors.primaryDeepRose} />
         </SectionCard>
 
         {/* About card */}
         <SectionCard title="About">
           <ProfileRow label="How Mom Brain Works" onPress={handleHowItWorks} />
           <RowDivider />
-          <ProfileRow
-            label="App Version"
-            onPress={() => {}}
-            rightText={appVersion}
-            showChevron={false}
-          />
+          <ProfileRow label="App Version" onPress={() => {}} rightText={appVersion} showChevron={false} />
           <RowDivider />
           <ProfileRow label="Contact Support" onPress={handleContactSupport} />
         </SectionCard>
       </ScrollView>
 
       {/* How Mom Brain Works modal */}
-      <Modal
-        visible={howItWorksVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={handleHowItWorksClose}
-      >
+      <Modal visible={howItWorksVisible} transparent animationType="slide" onRequestClose={handleHowItWorksClose}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={handleHowItWorksClose} />
           <View style={styles.modalSheet}>
@@ -341,6 +446,127 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
         </View>
+      </Modal>
+
+      {/* Add / Edit Kid modal */}
+      <Modal visible={kidModalVisible} transparent animationType="slide" onRequestClose={() => setKidModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => {
+            console.log('[Profile] Kid modal dismissed');
+            setKidModalVisible(false);
+          }} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>{editingKid ? `Edit ${editingKid.name}` : 'Add a child'}</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Name *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Emma"
+                placeholderTextColor={Colors.textMuted}
+                value={kidName}
+                onChangeText={setKidName}
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>Age</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. 8"
+                  placeholderTextColor={Colors.textMuted}
+                  value={kidAge}
+                  onChangeText={setKidAge}
+                  keyboardType="number-pad"
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>Grade</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. 3rd"
+                  placeholderTextColor={Colors.textMuted}
+                  value={kidGrade}
+                  onChangeText={setKidGrade}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nicknames (comma-separated)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Em, Emmy"
+                placeholderTextColor={Colors.textMuted}
+                value={kidNicknames}
+                onChangeText={setKidNicknames}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              {editingKid && (
+                <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteKid}>
+                  <Text style={styles.deleteButtonText}>Remove</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.modalCancel} onPress={() => {
+                console.log('[Profile] Kid modal cancel pressed');
+                setKidModalVisible(false);
+              }}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm, !kidName.trim() && styles.modalConfirmDisabled]}
+                onPress={handleSaveKid}
+                disabled={!kidName.trim()}
+              >
+                <Text style={styles.modalConfirmText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Partner name modal */}
+      <Modal visible={partnerModalVisible} transparent animationType="slide" onRequestClose={() => setPartnerModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => {
+            console.log('[Profile] Partner modal dismissed');
+            setPartnerModalVisible(false);
+          }} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Partner's name</Text>
+            <Text style={styles.modalBody}>
+              This helps Mom Brain know who to assign tasks to when you mention your partner.
+            </Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Name</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Alex"
+                placeholderTextColor={Colors.textMuted}
+                value={partnerNameInput}
+                onChangeText={setPartnerNameInput}
+                autoFocus
+              />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => {
+                console.log('[Profile] Partner modal cancel pressed');
+                setPartnerModalVisible(false);
+              }}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirm} onPress={handleSavePartner}>
+                <Text style={styles.modalConfirmText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -366,7 +592,6 @@ const styles = StyleSheet.create({
     color: Colors.textBody,
     marginTop: -6,
   },
-  // Card
   card: {
     backgroundColor: Colors.card,
     borderRadius: 20,
@@ -396,16 +621,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_700Bold',
     color: Colors.textMain,
   },
-  // Row
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 13,
   },
-  rowPressed: {
-    opacity: 0.65,
-  },
+  rowPressed: { opacity: 0.65 },
   rowLabel: {
     fontSize: 16,
     fontFamily: 'Nunito_400Regular',
@@ -425,7 +647,6 @@ const styles = StyleSheet.create({
   rowDivider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginLeft: 0,
   },
   chevron: {
     fontSize: 20,
@@ -433,13 +654,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     lineHeight: 22,
   },
-  // Account section
-  accountSignedIn: {
-    gap: 10,
-  },
-  accountSignedOut: {
-    gap: 10,
-  },
+  accountSignedIn: { gap: 10 },
+  accountSignedOut: { gap: 10 },
   accountEmailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -550,6 +766,73 @@ const styles = StyleSheet.create({
   },
   modalCloseButtonText: {
     fontSize: 16,
+    fontFamily: 'Nunito_700Bold',
+    color: '#FFFFFF',
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textBody,
+  },
+  modalInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    fontSize: 16,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMain,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  deleteButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#C8846044',
+    backgroundColor: '#C8846014',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_600SemiBold',
+    color: '#C08060',
+  },
+  modalCancel: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_600SemiBold',
+    color: Colors.textBody,
+  },
+  modalConfirm: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: Colors.primaryDeepRose,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalConfirmDisabled: { opacity: 0.45 },
+  modalConfirmText: {
+    fontSize: 15,
     fontFamily: 'Nunito_700Bold',
     color: '#FFFFFF',
   },

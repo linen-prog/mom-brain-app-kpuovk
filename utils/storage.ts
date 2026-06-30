@@ -1,6 +1,40 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DUMP_KEY = 'mombrain.latestDump';
+const KIDS_KEY = 'mombrain.kids';
+const PARTNER_KEY = 'mombrain.partnerName';
+const ONBOARDING_KEY = 'mombrain.onboardingDone';
+
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+
+export interface KidProfile {
+  id: string;
+  name: string;
+  age?: number;
+  grade?: string;
+  nicknames?: string[];
+}
+
+export interface TaskMeta {
+  taskText: string;
+  category: string;
+  childName?: string | null;
+  delegation: 'me' | 'partner' | 'coparent' | 'kid';
+  isPartnerTask: boolean;
+}
+
+export interface TrackingItem {
+  id: string;
+  text: string;
+  dueDate?: string | null;
+  category: 'tracking';
+}
+
+export interface RhythmInsight {
+  topCategories: string[];
+  recurringThemes: string[];
+  momCheckIn: string;
+}
 
 export interface OrganizedDump {
   id: string;
@@ -17,7 +51,12 @@ export interface OrganizedDump {
   work: string[];
   momCheckIn: string;
   completed: Record<string, boolean>;
+  taskMeta?: TaskMeta[];
+  trackingItems?: TrackingItem[];
+  rhythmInsights?: RhythmInsight;
 }
+
+// ─── Dump storage ─────────────────────────────────────────────────────────────
 
 export async function getLatestDump(): Promise<OrganizedDump | null> {
   try {
@@ -103,5 +142,68 @@ export async function clearAllData(): Promise<void> {
     console.log('[Storage] clearAllData — cleared both keys');
   } catch (err) {
     console.error('[Storage] clearAllData error:', err);
+  }
+}
+
+// ─── Kids storage ─────────────────────────────────────────────────────────────
+
+export async function getKids(): Promise<KidProfile[]> {
+  try {
+    const raw = await AsyncStorage.getItem(KIDS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as KidProfile[];
+  } catch (err) {
+    console.error('[Storage] getKids error:', err);
+    return [];
+  }
+}
+
+export async function saveKids(kids: KidProfile[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KIDS_KEY, JSON.stringify(kids));
+    console.log('[Storage] saveKids — saved', kids.length, 'kids');
+  } catch (err) {
+    console.error('[Storage] saveKids error:', err);
+  }
+}
+
+// ─── Partner name storage ─────────────────────────────────────────────────────
+
+export async function getPartnerName(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(PARTNER_KEY);
+  } catch (err) {
+    console.error('[Storage] getPartnerName error:', err);
+    return null;
+  }
+}
+
+export async function savePartnerName(name: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PARTNER_KEY, name);
+    console.log('[Storage] savePartnerName — saved:', name);
+  } catch (err) {
+    console.error('[Storage] savePartnerName error:', err);
+  }
+}
+
+// ─── Onboarding storage ───────────────────────────────────────────────────────
+
+export async function getOnboardingDone(): Promise<boolean> {
+  try {
+    const val = await AsyncStorage.getItem(ONBOARDING_KEY);
+    return val === 'true';
+  } catch (err) {
+    console.error('[Storage] getOnboardingDone error:', err);
+    return false;
+  }
+}
+
+export async function setOnboardingDone(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    console.log('[Storage] setOnboardingDone — marked complete');
+  } catch (err) {
+    console.error('[Storage] setOnboardingDone error:', err);
   }
 }
