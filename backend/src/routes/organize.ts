@@ -244,10 +244,8 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      const hasApiKey = !!process.env.OPENROUTER_API_KEY;
-
-      if (!hasApiKey) {
-        return {
+      if (!process.env.OPENROUTER_API_KEY) {
+        const mockResponse: OrganizeResponse = {
           doToday: ['Buy milk', 'Schedule dentist appointment'],
           thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
           kids: [],
@@ -258,14 +256,15 @@ export function register(app: App, fastify: FastifyInstance) {
           holdingForLater: [],
           momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
         };
+        reply.status(200);
+        return mockResponse;
       }
 
       try {
         const body = request.body as any;
 
         if (!body?.text?.trim()) {
-          reply.code(400);
-          return { error: 'text is required' };
+          return reply.status(400).send({ error: 'text is required' });
         }
 
         const { text, kids, partnerName } = body;
@@ -349,7 +348,7 @@ export function register(app: App, fastify: FastifyInstance) {
             };
 
             const result = OrganizeSchema.parse(parsed);
-            return result;
+            return reply.status(200).send(result);
           } catch (error) {
             lastError = error;
             if (!isRateLimitError(error)) {
@@ -358,29 +357,26 @@ export function register(app: App, fastify: FastifyInstance) {
             if (attempt < 4) {
               await new Promise(resolve => setTimeout(resolve, Math.pow(3, attempt + 1) * 1000));
             } else {
-              reply.code(429);
-              return {
+              return reply.status(429).send({
                 error: 'rate_limited',
                 message: 'Mom Brain needs a minute to catch up. Try again shortly.',
-              };
+              });
             }
           }
         }
 
-        reply.code(500);
-        return {
+        return reply.status(500).send({
           error: 'server_error',
           message: 'Something got tangled. Try again.',
-        };
+        });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         const errStack = err instanceof Error ? err.stack : undefined;
         app.logger.error({ err, errMsg, errStack, errKeys: Object.keys(err || {}) }, 'organize_handler_error');
-        reply.code(500);
-        return {
+        return reply.status(500).send({
           error: 'server_error',
           message: 'Something got tangled. Try again.',
-        };
+        });
       }
     },
   );
