@@ -1,3 +1,4 @@
+// recompile trigger — no functional change
 import { createApplication } from "@specific-dev/framework";
 import * as schema from './db/schema/schema.js';
 import * as organizeRoutes from './routes/organize.js';
