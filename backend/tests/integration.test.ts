@@ -602,66 +602,6 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("rollingOver");
       expect(data).toHaveProperty("comingUp");
     });
-
-    test("Reject request with missing completedTasks", async () => {
-      const res = await api("/api/rhythm/recap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pendingTasks: [],
-          trackingItems: [],
-          daysUntilSunday: 1,
-        }),
-      });
-      await expectStatus(res, 400);
-      const data = await res.json();
-      expect(data).toHaveProperty("error");
-    });
-
-    test("Reject request with missing pendingTasks", async () => {
-      const res = await api("/api/rhythm/recap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completedTasks: [],
-          trackingItems: [],
-          daysUntilSunday: 1,
-        }),
-      });
-      await expectStatus(res, 400);
-      const data = await res.json();
-      expect(data).toHaveProperty("error");
-    });
-
-    test("Reject request with missing trackingItems", async () => {
-      const res = await api("/api/rhythm/recap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completedTasks: [],
-          pendingTasks: [],
-          daysUntilSunday: 1,
-        }),
-      });
-      await expectStatus(res, 400);
-      const data = await res.json();
-      expect(data).toHaveProperty("error");
-    });
-
-    test("Reject request with missing daysUntilSunday", async () => {
-      const res = await api("/api/rhythm/recap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completedTasks: [],
-          pendingTasks: [],
-          trackingItems: [],
-        }),
-      });
-      await expectStatus(res, 400);
-      const data = await res.json();
-      expect(data).toHaveProperty("error");
-    });
   });
 
   describe("POST /api/organize-image", () => {

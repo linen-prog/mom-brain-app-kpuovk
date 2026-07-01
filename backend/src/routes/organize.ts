@@ -25,7 +25,7 @@ export interface OrganizeResponse {
   meals: string[];
   messages: string[];
   holdingForLater: string[];
-  work?: string[];
+  work: string[];
   momCheckIn: string;
   taskMeta?: Array<{
     taskText: string;
@@ -47,17 +47,35 @@ export interface OrganizeResponse {
   };
 }
 
+// Helper function to coerce unknown values to string arrays
+function coerceToStringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (typeof item === 'object' && item !== null) {
+        const obj = item as Record<string, unknown>;
+        const textValue = obj.text || obj.task || obj.message || obj.content || obj.description || obj.item;
+        if (typeof textValue === 'string') return textValue;
+        return JSON.stringify(item);
+      }
+      return String(item);
+    })
+    .filter((str) => str && str.trim().length > 0);
+}
+
 const OrganizeSchema = z.object({
-  doToday: z.array(z.string()),
-  thisWeek: z.array(z.string()),
-  kids: z.array(z.string()),
-  home: z.array(z.string()),
-  errands: z.array(z.string()),
-  meals: z.array(z.string()),
-  messages: z.array(z.string()),
-  holdingForLater: z.array(z.string()),
-  work: z.array(z.string()).optional(),
-  momCheckIn: z.string().min(1),
+  doToday: z.unknown().transform(coerceToStringArray).default([]),
+  thisWeek: z.unknown().transform(coerceToStringArray).default([]),
+  kids: z.unknown().transform(coerceToStringArray).default([]),
+  home: z.unknown().transform(coerceToStringArray).default([]),
+  errands: z.unknown().transform(coerceToStringArray).default([]),
+  meals: z.unknown().transform(coerceToStringArray).default([]),
+  messages: z.unknown().transform(coerceToStringArray).default([]),
+  holdingForLater: z.unknown().transform(coerceToStringArray).default([]),
+  work: z.unknown().transform(coerceToStringArray).default([]),
+  momCheckIn: z.string().min(1).default('You showed up. That counts.'),
   taskMeta: z
     .array(
       z.object({
@@ -68,7 +86,8 @@ const OrganizeSchema = z.object({
         isPartnerTask: z.boolean(),
       })
     )
-    .optional(),
+    .optional()
+    .catch([]),
   trackingItems: z
     .array(
       z.object({
@@ -78,14 +97,16 @@ const OrganizeSchema = z.object({
         category: z.string(),
       })
     )
-    .optional(),
+    .optional()
+    .catch([]),
   rhythmInsights: z
     .object({
       topCategories: z.array(z.string()),
       recurringThemes: z.array(z.string()),
       momCheckIn: z.string(),
     })
-    .optional(),
+    .optional()
+    .catch(undefined),
 });
 
 export const ORGANIZE_SYSTEM_PROMPT = `You are a compassionate AI assistant helping a busy mom organize her mental load. Parse the brain dump text and return a JSON object with these exact fields.

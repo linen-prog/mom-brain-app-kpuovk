@@ -131,6 +131,7 @@ export function register(app: App, fastify: FastifyInstance) {
           meals: [],
           messages: [],
           holdingForLater: [],
+          work: [],
           momCheckIn: 'Found actionable content in the screenshot.',
           source: 'screenshot',
         };
