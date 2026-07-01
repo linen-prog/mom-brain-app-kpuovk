@@ -77,28 +77,50 @@ const OrganizeSchema = z.object({
   work: z.unknown().transform(coerceToStringArray).default([]),
   momCheckIn: z.string().min(1).default('You showed up. That counts.'),
   taskMeta: z
-    .array(
-      z.object({
-        taskText: z.string(),
-        category: z.enum(['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work', 'holdingForLater']),
-        childName: z.string().nullable(),
-        delegation: z.enum(['me', 'partner', 'coparent', 'kid']),
-        isPartnerTask: z.boolean(),
-      })
-    )
+    .unknown()
+    .transform((val): OrganizeResponse['taskMeta'] => {
+      if (val === undefined || val === null) return undefined;
+      if (!Array.isArray(val)) return [];
+      return (val as unknown[]).flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const obj = item as Record<string, unknown>;
+        const taskText = typeof obj.taskText === 'string' ? obj.taskText : typeof obj.task === 'string' ? obj.task : typeof obj.text === 'string' ? obj.text : null;
+        if (!taskText) return [];
+        const validCategories = ['doToday','thisWeek','kids','home','errands','meals','messages','work','holdingForLater'] as const;
+        const cat = validCategories.includes(obj.category as typeof validCategories[number]) ? obj.category as typeof validCategories[number] : 'doToday';
+        const validDelegations = ['me','partner','coparent','kid'] as const;
+        const del = validDelegations.includes(obj.delegation as typeof validDelegations[number]) ? obj.delegation as typeof validDelegations[number] : 'me';
+        return [{
+          taskText,
+          category: cat,
+          childName: typeof obj.childName === 'string' ? obj.childName : null,
+          delegation: del,
+          isPartnerTask: obj.isPartnerTask === true || obj.delegation === 'partner' || obj.delegation === 'coparent',
+        }];
+      });
+    })
     .optional()
-    .catch([]),
+    .catch(undefined),
   trackingItems: z
-    .array(
-      z.object({
-        id: z.string(),
-        text: z.string(),
-        dueDate: z.string().nullable(),
-        category: z.string(),
-      })
-    )
+    .unknown()
+    .transform((val): OrganizeResponse['trackingItems'] => {
+      if (val === undefined || val === null) return undefined;
+      if (!Array.isArray(val)) return [];
+      return (val as unknown[]).flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const obj = item as Record<string, unknown>;
+        const text = typeof obj.text === 'string' ? obj.text : typeof obj.task === 'string' ? obj.task : typeof obj.item === 'string' ? obj.item : typeof obj.description === 'string' ? obj.description : null;
+        if (!text) return [];
+        return [{
+          id: typeof obj.id === 'string' ? obj.id : Math.random().toString(36).slice(2),
+          text,
+          dueDate: typeof obj.dueDate === 'string' ? obj.dueDate : typeof obj.date === 'string' ? obj.date : null,
+          category: typeof obj.category === 'string' ? obj.category : 'holdingForLater',
+        }];
+      });
+    })
     .optional()
-    .catch([]),
+    .catch(undefined),
   rhythmInsights: z
     .object({
       topCategories: z.array(z.string()),
@@ -139,8 +161,14 @@ DELEGATION DETECTION:
 
 TRACKING ITEMS (extract as trackingItems, NOT regular tasks):
 - Phrases: "I need to remember that...", "coming up...", "starting next month...", "don't forget...", "keep an eye on...", "permission slip due...", "refill in...", "size change soon..."
+- School events with specific dates (picture day, bake sale, parent meeting, field trips) → trackingItems with dueDate
+- Order confirmations with delivery dates → trackingItems with dueDate set to delivery date
+- Return windows → trackingItems with text like "Return window closes [date]"
+- IMPORTANT: Even if items go into trackingItems, also add a reminder task to the appropriate category (e.g. "Sign up for parent-teacher conferences by Nov 10" in thisWeek)
 - Include dueDate (ISO 8601) if date mentioned, otherwise null
 - Generate a UUID for each id
+
+TASKMETA REQUIREMENT: You MUST populate the taskMeta array with one entry for EVERY task that appears in any category array. Each entry needs: taskText (exact task string), category (which array it's in), childName (null unless task is directly about a stored child), delegation ("me"/"partner"/"coparent"/"kid"), isPartnerTask (true if delegation is partner or coparent). Do not return an empty taskMeta array if there are tasks.
 
 RHYTHM INSIGHTS:
 - topCategories: top 2-3 categories by item count
@@ -302,7 +330,7 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             description: 'Successfully organized brain dump',
             type: 'object',
-            required: ['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'holdingForLater', 'momCheckIn'],
+            required: ['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'holdingForLater', 'work', 'momCheckIn'],
             properties: {
               doToday: { type: 'array', items: { type: 'string' } },
               thisWeek: { type: 'array', items: { type: 'string' } },

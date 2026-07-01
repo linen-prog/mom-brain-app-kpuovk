@@ -77,9 +77,52 @@ export function register(app: App, fastify: FastifyInstance) {
             description: 'Tasks extracted and organized from image',
             type: 'object',
             properties: {
-              noActionableContent: { type: 'boolean' },
-              message: { type: 'string' },
+              noActionableContent: { type: 'boolean', nullable: true },
+              message: { type: 'string', nullable: true },
+              doToday: { type: 'array', items: { type: 'string' } },
+              thisWeek: { type: 'array', items: { type: 'string' } },
+              kids: { type: 'array', items: { type: 'string' } },
+              home: { type: 'array', items: { type: 'string' } },
+              errands: { type: 'array', items: { type: 'string' } },
+              meals: { type: 'array', items: { type: 'string' } },
+              messages: { type: 'array', items: { type: 'string' } },
+              holdingForLater: { type: 'array', items: { type: 'string' } },
+              work: { type: 'array', items: { type: 'string' } },
+              momCheckIn: { type: 'string' },
               source: { type: 'string' },
+              taskMeta: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    taskText: { type: 'string' },
+                    category: { type: 'string', enum: ['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work', 'holdingForLater'] },
+                    childName: { type: 'string', nullable: true },
+                    delegation: { type: 'string', enum: ['me', 'partner', 'coparent', 'kid'] },
+                    isPartnerTask: { type: 'boolean' },
+                  },
+                },
+              },
+              trackingItems: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    text: { type: 'string' },
+                    dueDate: { type: 'string', nullable: true },
+                    category: { type: 'string' },
+                  },
+                },
+              },
+              rhythmInsights: {
+                type: 'object',
+                properties: {
+                  topCategories: { type: 'array', items: { type: 'string' } },
+                  recurringThemes: { type: 'array', items: { type: 'string' } },
+                  momCheckIn: { type: 'string' },
+                },
+              },
             },
           },
           400: {
@@ -119,6 +162,28 @@ export function register(app: App, fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Maximum 3 images allowed' });
       }
 
+      // Validate each image has required fields and valid format
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        if (!img.base64 || typeof img.base64 !== 'string') {
+          return reply.status(400).send({ error: 'Each image must have a base64 field' });
+        }
+        if (!img.mimeType || typeof img.mimeType !== 'string') {
+          return reply.status(400).send({ error: 'Each image must have a mimeType field' });
+        }
+        if (img.base64.length === 0) {
+          return reply.status(400).send({ error: 'base64 data cannot be empty' });
+        }
+        // Validate base64 format - must contain only valid base64 characters
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(img.base64)) {
+          return reply.status(400).send({ error: 'base64 data is invalid' });
+        }
+        // Validate mimeType is an image type
+        if (!img.mimeType.startsWith('image/')) {
+          return reply.status(400).send({ error: 'mimeType must be an image type (image/png, image/jpeg, etc.)' });
+        }
+      }
+
       app.logger.info({ imageCount: images.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize-image');
 
       if (!process.env.OPENROUTER_API_KEY) {
@@ -133,6 +198,13 @@ export function register(app: App, fastify: FastifyInstance) {
           holdingForLater: [],
           work: [],
           momCheckIn: 'Found actionable content in the screenshot.',
+          taskMeta: [],
+          trackingItems: [],
+          rhythmInsights: {
+            topCategories: [],
+            recurringThemes: [],
+            momCheckIn: 'Found actionable content in the screenshot.',
+          },
           source: 'screenshot',
         };
         reply.code(200);
