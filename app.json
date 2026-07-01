@@ -4,10 +4,10 @@
     "slug": "mom-brain",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/app-icon-ruf.png",
+    "icon": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/app-icon-ruf.png",
+      "image": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/app-icon-ruf.png",
+        "foregroundImage": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.placeholder.app"
