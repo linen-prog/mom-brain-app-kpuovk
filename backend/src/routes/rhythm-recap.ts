@@ -34,7 +34,7 @@ export function register(app: App, fastify: FastifyInstance) {
         tags: ['rhythm'],
         body: {
           type: 'object',
-          required: ['completedTasks', 'pendingTasks', 'trackingItems'],
+          required: ['completedTasks', 'pendingTasks', 'trackingItems', 'daysUntilSunday'],
           properties: {
             completedTasks: { type: 'array', items: { type: 'string' } },
             pendingTasks: { type: 'array', items: { type: 'string' } },
@@ -64,6 +64,13 @@ export function register(app: App, fastify: FastifyInstance) {
               comingUp: { type: 'array', items: { type: 'string' } },
               momMessage: { type: 'string' },
               weekLabel: { type: 'string' },
+            },
+          },
+          400: {
+            description: 'Missing or invalid request',
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
             },
           },
           500: {

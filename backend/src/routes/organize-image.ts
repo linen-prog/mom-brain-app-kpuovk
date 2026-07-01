@@ -27,12 +27,6 @@ function isRateLimitError(err: unknown): boolean {
   return false;
 }
 
-const VISION_SYSTEM_PROMPT = `You are analyzing screenshot images to extract actionable content for a busy parent. Extract ONLY tasks, deadlines, requests, reminders, things to buy/do/remember. Return each distinct task separately. Mark unclear details with [confirm]. Ignore casual conversation, ads, irrelevant UI elements.
-
-If the image contains NO actionable content (only casual chat, news, ads, or general content), respond with exactly: "NO_ACTIONABLE_CONTENT"
-
-Otherwise, return a plain text list of actionable items found.`;
-
 export function register(app: App, fastify: FastifyInstance) {
   fastify.post<{ Body: OrganizeImageRequestBody }>(
     '/api/organize-image',
@@ -215,23 +209,39 @@ export function register(app: App, fastify: FastifyInstance) {
         const apiKey = process.env.OPENROUTER_API_KEY;
 
         // Step 1: Vision extraction
+        const visionSystemPrompt = `You are a vision assistant for Mom Brain, an app that helps busy parents organize their mental load. Your job is to read screenshots and extract actionable content.
+
+RULES:
+- Only extract text that is literally visible in the image
+- Extract only actionable items: tasks, deadlines, requests, reminders, things to buy/do/remember
+- Each distinct item should be on a separate line
+- Mark unclear or ambiguous details with [confirm]
+- Ignore: casual conversation, reactions, ads, decorative text, UI chrome
+- If the image is blank, a photo, a selfie, a meme, or contains NO readable text → respond with exactly: NO_ACTIONABLE_CONTENT
+- If text exists but none is actionable (jokes, news, unrelated chat) → respond with exactly: NO_ACTIONABLE_CONTENT
+- Do NOT invent, imagine, or guess content not visibly present
+- Do NOT add tasks based on what a parent "might" need to do`;
+
         let extractedText: string | null = null;
         let lastError: unknown;
 
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
-            const contentParts: any[] = [{ type: 'text', text: VISION_SYSTEM_PROMPT }];
+            const contentParts: any[] = [];
 
             for (const image of images) {
               contentParts.push({
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: image.mimeType,
-                  data: image.base64,
+                type: 'image_url',
+                image_url: {
+                  url: `data:${image.mimeType};base64,${image.base64}`,
                 },
               });
             }
+
+            contentParts.push({
+              type: 'text',
+              text: 'Extract actionable items from this image. If there is no readable text or no actionable content, respond with exactly: NO_ACTIONABLE_CONTENT',
+            });
 
             const visionResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
@@ -244,6 +254,10 @@ export function register(app: App, fastify: FastifyInstance) {
               body: JSON.stringify({
                 model: 'google/gemini-2.5-flash',
                 messages: [
+                  {
+                    role: 'system',
+                    content: visionSystemPrompt,
+                  },
                   {
                     role: 'user',
                     content: contentParts,
@@ -287,9 +301,23 @@ export function register(app: App, fastify: FastifyInstance) {
           throw lastError || new Error('Failed to extract text from images');
         }
 
-        // Check if no actionable content
-        if (extractedText.trim() === 'NO_ACTIONABLE_CONTENT') {
+        // Check if no actionable content (case-insensitive and prefix match)
+        const trimmedUpper = extractedText.trim().toUpperCase();
+        if (trimmedUpper === 'NO_ACTIONABLE_CONTENT' || trimmedUpper.startsWith('NO_ACTIONABLE_CONTENT')) {
           app.logger.info({}, 'organize_image_no_actionable_content');
+          reply.code(200);
+          return {
+            noActionableContent: true,
+            message: 'Nothing actionable found in this image.',
+          } as NoActionableContentResponse;
+        }
+
+        // Secondary validation to prevent hallucination artifacts
+        const wordCount = extractedText.split(/\s+/).length;
+        const longWords = extractedText.split(/\s+/).filter(word => word.length > 3).length;
+
+        if (extractedText.length < 15 || longWords < 2) {
+          app.logger.info({ extractedText, length: extractedText.length, longWordsCount: longWords }, 'organize_image_insufficient_content');
           reply.code(200);
           return {
             noActionableContent: true,
