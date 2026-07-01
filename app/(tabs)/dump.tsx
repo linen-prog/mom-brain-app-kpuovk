@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -442,7 +443,8 @@ export default function DumpScreen() {
       allowsMultipleSelection: true,
       selectionLimit: 3,
       base64: true,
-      quality: 0.7,
+      quality: 0.5,
+      exif: false,
     });
 
     if (result.canceled) {
@@ -450,13 +452,30 @@ export default function DumpScreen() {
       return;
     }
 
-    const picked = result.assets
-      .filter((a) => a.base64)
-      .map((a) => ({
-        uri: a.uri,
-        base64: a.base64 as string,
-        mimeType: a.mimeType ?? 'image/jpeg',
-      }));
+    const BASE64_LIMIT = 3_000_000;
+
+    const picked = await Promise.all(
+      result.assets
+        .filter((a) => a.base64)
+        .map(async (a) => {
+          let base64 = a.base64 as string;
+          let mimeType = a.mimeType ?? 'image/jpeg';
+
+          if (base64.length > BASE64_LIMIT) {
+            console.log('[Image] Image too large (' + base64.length + ' chars), resizing…');
+            const manipulated = await ImageManipulator.manipulateAsync(
+              a.uri,
+              [{ resize: { width: 1200 } }],
+              { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
+            base64 = manipulated.base64 ?? base64;
+            mimeType = 'image/jpeg';
+            console.log('[Image] Resized image base64 length:', base64.length);
+          }
+
+          return { uri: a.uri, base64, mimeType };
+        })
+    );
 
     const combined = [...selectedImages, ...picked].slice(0, 3);
     console.log('[Image] Images selected — count:', combined.length);
