@@ -140,6 +140,8 @@ export default function DumpScreen() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OrganizedDump | null>(null);
   const [lastOrganized, setLastOrganized] = useState<string | null>(null);
+  const [typedExpanded, setTypedExpanded] = useState(false);
+  const [inputSource, setInputSource] = useState<'voice' | 'typed' | 'screenshot' | null>(null);
 
   // Kids / partner context
   const [kids, setKids] = useState<KidProfile[]>([]);
@@ -199,15 +201,16 @@ export default function DumpScreen() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Helper fade ──────────────────────────────────────────────────────────
+  // ── Helper fade — only visible when typedExpanded and no text ────────────
   const hasText = text.length > 0;
   useEffect(() => {
+    const shouldShow = typedExpanded && !hasText;
     Animated.timing(helperOpacity, {
-      toValue: hasText ? 0 : 1,
+      toValue: shouldShow ? 1 : 0,
       duration: 250,
       useNativeDriver: true,
     }).start();
-  }, [hasText, helperOpacity]);
+  }, [hasText, typedExpanded, helperOpacity]);
 
   // ── Pulse animation for recording state ─────────────────────────────────
   useEffect(() => {
@@ -269,7 +272,9 @@ export default function DumpScreen() {
   // ── Organize handler ─────────────────────────────────────────────────────
   const handleOrganize = useCallback(async () => {
     if (!text.trim()) return;
-    console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length, '| kids:', kids.length, '| partner:', partnerName ?? 'none');
+    const currentSource = typedExpanded ? 'typed' : (inputSource ?? 'voice');
+    console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length, '| kids:', kids.length, '| partner:', partnerName ?? 'none', '| inputSource:', currentSource);
+    setInputSource(currentSource);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     setError(null);
@@ -310,11 +315,13 @@ export default function DumpScreen() {
         taskMeta: normalized.taskMeta,
         trackingItems: normalized.trackingItems,
         rhythmInsights: normalized.rhythmInsights,
+        inputSource: currentSource,
       };
       await saveLatestDump(dump);
       setResult(dump);
       setLastOrganized(dump.createdAt);
       setText('');
+      setTypedExpanded(false);
 
       Animated.timing(helperOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start();
       Animated.timing(resultsOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -336,7 +343,7 @@ export default function DumpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [text, kids, partnerName, resultsOpacity, helperOpacity]);
+  }, [text, kids, partnerName, resultsOpacity, helperOpacity, inputSource, typedExpanded]);
 
   // ── Voice: tap mic button ────────────────────────────────────────────────
   const handleMicPress = useCallback(async () => {
@@ -365,6 +372,8 @@ export default function DumpScreen() {
           console.log('[Voice] Text updated — new length:', next.length);
           return next;
         });
+        setInputSource('voice');
+        console.log('[Voice] inputSource set to voice');
         setVoiceState('idle');
         showSuccessCaption();
         setTimeout(() => { scrollRef.current?.scrollTo({ y: 0, animated: true }); }, 200);
@@ -632,23 +641,7 @@ export default function DumpScreen() {
             <Text style={styles.cardHeading}>Get it out of your head.</Text>
           </View>
 
-          <Animated.Text style={[styles.helperSubtext, { opacity: helperOpacity }]}>
-            {'Say everything—the big stuff, the small stuff, the thing you keep forgetting. It\'s all welcome here.'}
-          </Animated.Text>
-
-          <TextInput
-            style={styles.textInput}
-            multiline
-            placeholder=""
-            placeholderTextColor={Colors.textMuted}
-            value={text}
-            onChangeText={setText}
-            textAlignVertical="top"
-            editable={!loading && voiceState !== 'transcribing'}
-          />
-
-          <View style={styles.divider} />
-
+          {/* Voice row */}
           <View style={styles.voiceRow}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="mic.fill" android_material_icon_name="mic" size={16} color={Colors.primaryDeepRose} />
@@ -682,6 +675,55 @@ export default function DumpScreen() {
               </View>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.divider} />
+
+          {/* Type it out row */}
+          <View style={styles.voiceRow}>
+            <View style={styles.voiceRowLeft}>
+              <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={16} color={Colors.primaryDeepRose} />
+              <View>
+                <Text style={styles.voiceLabel}>Type it out</Text>
+                <Text style={styles.voiceSubLabel}>Tap to type your thoughts</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                const next = !typedExpanded;
+                console.log('[Dump] "Type it out" button pressed — typedExpanded:', next);
+                setTypedExpanded(next);
+              }}
+              activeOpacity={0.85}
+              accessibilityLabel="Toggle typed input"
+            >
+              <View style={[styles.micButton, typedExpanded && styles.micButtonActive]}>
+                <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={28} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Expandable typed input */}
+          {typedExpanded && (
+            <View style={styles.typedInputContainer}>
+              <Animated.Text style={[styles.helperSubtext, { opacity: helperOpacity }]}>
+                {'Say everything—the big stuff, the small stuff, the thing you keep forgetting. It\'s all welcome here.'}
+              </Animated.Text>
+              <TextInput
+                style={styles.textInput}
+                multiline
+                placeholder=""
+                placeholderTextColor={Colors.textMuted}
+                value={text}
+                onChangeText={(val) => {
+                  console.log('[Dump] TextInput changed — length:', val.length);
+                  setText(val);
+                }}
+                textAlignVertical="top"
+                editable={!loading && voiceState !== 'transcribing'}
+                autoFocus={typedExpanded}
+              />
+            </View>
+          )}
 
           {/* Thumbnail row */}
           {selectedImages.length > 0 && (
@@ -825,6 +867,7 @@ export default function DumpScreen() {
                 items={result.doToday}
                 accentColor={CategoryColors.doToday}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -834,6 +877,7 @@ export default function DumpScreen() {
                 items={result.thisWeek}
                 accentColor={CategoryColors.thisWeek}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -843,6 +887,7 @@ export default function DumpScreen() {
                 items={result.kids}
                 accentColor={CategoryColors.kids}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -852,6 +897,7 @@ export default function DumpScreen() {
                 items={result.home}
                 accentColor={CategoryColors.home}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -861,6 +907,7 @@ export default function DumpScreen() {
                 items={result.errands}
                 accentColor={CategoryColors.errands}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -870,6 +917,7 @@ export default function DumpScreen() {
                 items={result.meals}
                 accentColor={CategoryColors.meals}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -879,6 +927,7 @@ export default function DumpScreen() {
                 items={result.messages}
                 accentColor={CategoryColors.messages}
                 taskMeta={result.taskMeta}
+                inputSource={result.inputSource}
               />
             )}
 
@@ -892,6 +941,7 @@ export default function DumpScreen() {
                   accentColor={CategoryColors.holdingForLater}
                   variant="parked"
                   taskMeta={result.taskMeta}
+                  inputSource={result.inputSource}
                 />
               </View>
             )}
@@ -1653,6 +1703,14 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textDecorationLine: 'underline',
     marginTop: 4,
+  },
+  micButtonActive: {
+    backgroundColor: Colors.primaryDeepRose,
+    opacity: 0.75,
+  },
+  typedInputContainer: {
+    marginTop: 14,
+    gap: 4,
   },
   // Image picker
   micButtonDisabled: {

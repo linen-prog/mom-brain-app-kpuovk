@@ -54,6 +54,7 @@ export interface OrganizedDump {
   taskMeta?: TaskMeta[];
   trackingItems?: TrackingItem[];
   rhythmInsights?: RhythmInsight;
+  inputSource?: 'voice' | 'typed' | 'screenshot';
 }
 
 // ─── Dump storage ─────────────────────────────────────────────────────────────

@@ -10,9 +10,10 @@ interface CategorySectionProps {
   emptyHint?: string;
   variant?: 'default' | 'parked';
   taskMeta?: TaskMeta[];
+  inputSource?: string;
 }
 
-export function CategorySection({ title, items, accentColor, emptyHint, variant = 'default', taskMeta }: CategorySectionProps) {
+export function CategorySection({ title, items, accentColor, emptyHint, variant = 'default', taskMeta, inputSource }: CategorySectionProps) {
   const isParked = variant === 'parked';
   const badgeBg = accentColor + '33';
 
@@ -60,6 +61,16 @@ export function CategorySection({ title, items, accentColor, emptyHint, variant 
                   {childName ? (
                     <View style={styles.childPill}>
                       <Text style={styles.childPillText}>{childName}</Text>
+                    </View>
+                  ) : null}
+                  {inputSource === 'typed' ? (
+                    <View style={styles.sourcePill}>
+                      <Text style={styles.sourcePillText}>⌨</Text>
+                    </View>
+                  ) : null}
+                  {inputSource === 'screenshot' ? (
+                    <View style={styles.sourcePill}>
+                      <Text style={styles.sourcePillText}>📷</Text>
                     </View>
                   ) : null}
                 </View>
@@ -180,6 +191,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Nunito_600SemiBold',
     color: Colors.textBody,
+  },
+  sourcePill: {
+    backgroundColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    alignSelf: 'center',
+  },
+  sourcePillText: {
+    fontSize: 11,
   },
   emptyHint: {
     fontSize: 14,
