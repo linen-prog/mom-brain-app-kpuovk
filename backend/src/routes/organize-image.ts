@@ -31,6 +31,7 @@ export function register(app: App, fastify: FastifyInstance) {
   fastify.post<{ Body: OrganizeImageRequestBody }>(
     '/api/organize-image',
     {
+      bodyLimit: 20971520,
       schema: {
         description: 'Extract and organize tasks from screenshot images',
         tags: ['organize'],
