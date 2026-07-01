@@ -105,7 +105,8 @@ export function register(app: App, fastify: FastifyInstance) {
           momMessage: 'You showed up this week. That matters.',
           weekLabel,
         };
-        return reply.send(mockResponse);
+        reply.code(200);
+        return mockResponse;
       }
 
       try {
@@ -189,7 +190,8 @@ export function register(app: App, fastify: FastifyInstance) {
           'rhythm_recap_ok'
         );
 
-        return reply.send(result);
+        reply.code(200);
+        return result;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         const errStack = error instanceof Error ? error.stack : undefined;
@@ -197,10 +199,11 @@ export function register(app: App, fastify: FastifyInstance) {
           { err: error, errorMsg, stack: errStack },
           'rhythm_recap_failed'
         );
-        return reply.code(500).send({
+        reply.code(500);
+        return {
           error: 'server_error',
           message: 'Failed to generate weekly recap. Try again.',
-        });
+        };
       }
     }
   );

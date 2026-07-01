@@ -73,9 +73,10 @@ export function register(app: App, fastify: FastifyInstance) {
 
       if (!taskText || taskText.trim().length === 0 || !context) {
         app.logger.warn({ taskText, context }, 'Missing required fields');
-        return reply.code(400).send({
+        reply.code(400);
+        return {
           error: 'taskText and context are required',
-        });
+        };
       }
 
       app.logger.info(
@@ -89,7 +90,8 @@ export function register(app: App, fastify: FastifyInstance) {
           body: `Dear ${recipientName || 'there'},\n\nRegarding: ${taskText}\n\nThank you for your time.\n\nBest regards`,
           recipientName: recipientName || null,
         };
-        return reply.send(mockResponse);
+        reply.code(200);
+        return mockResponse;
       }
 
       try {
@@ -149,17 +151,19 @@ export function register(app: App, fastify: FastifyInstance) {
         };
 
         app.logger.info({ contextType: context }, 'email_draft_ok');
-        return reply.send(result);
+        reply.code(200);
+        return result;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         app.logger.error(
           { err: error, errorMsg, stack: error instanceof Error ? error.stack : undefined },
           'email_draft_failed'
         );
-        return reply.code(500).send({
+        reply.code(500);
+        return {
           error: 'server_error',
           message: 'Failed to generate email draft. Try again.',
-        });
+        };
       }
     }
   );

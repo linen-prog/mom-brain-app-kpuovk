@@ -21,6 +21,7 @@ emailDraftRoutes.register(app, app.fastify);
 rhythmRecapRoutes.register(app, app.fastify);
 organizeImageRoutes.register(app, app.fastify);
 
+console.log('[STARTUP] OPENROUTER_API_KEY present:', !!process.env.OPENROUTER_API_KEY, '| length:', process.env.OPENROUTER_API_KEY?.length ?? 0);
 await app.run();
 app.logger.info('Application running');
 

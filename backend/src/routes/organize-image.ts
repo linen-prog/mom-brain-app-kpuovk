@@ -134,7 +134,8 @@ export function register(app: App, fastify: FastifyInstance) {
           momCheckIn: 'Found actionable content in the screenshot.',
           source: 'screenshot',
         };
-        return reply.send(mockResponse);
+        reply.code(200);
+        return mockResponse;
       }
 
       try {
@@ -216,10 +217,11 @@ export function register(app: App, fastify: FastifyInstance) {
         // Check if no actionable content
         if (extractedText.trim() === 'NO_ACTIONABLE_CONTENT') {
           app.logger.info({}, 'organize_image_no_actionable_content');
-          return reply.send({
+          reply.code(200);
+          return {
             noActionableContent: true,
             message: 'Nothing actionable found in this image.',
-          } as NoActionableContentResponse);
+          } as NoActionableContentResponse;
         }
 
         // Step 2: Organization via callOrganizeAI
@@ -231,21 +233,24 @@ export function register(app: App, fastify: FastifyInstance) {
         };
 
         app.logger.info({ categoriesCount: Object.keys(result).length }, 'organize_image_success');
-        return reply.send(result);
+        reply.code(200);
+        return result;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         if (isRateLimitError(error)) {
           app.logger.warn({ errorMsg }, 'organize_image_rate_limited');
-          return reply.code(429).send({
+          reply.code(429);
+          return {
             error: 'rate_limited',
             message: 'Mom Brain needs a minute to catch up. Try again shortly.',
-          });
+          };
         }
         app.logger.error({ err: error, errorMsg }, 'organize_image_failed');
-        return reply.code(500).send({
+        reply.code(500);
+        return {
           error: 'server_error',
           message: 'Failed to process image. Try again.',
-        });
+        };
       }
     }
   );
