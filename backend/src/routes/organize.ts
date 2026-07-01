@@ -139,7 +139,26 @@ function isRateLimitError(err: unknown): boolean {
 export async function callOrganizeAI(text: string, kids?: Kid[], partnerName?: string): Promise<OrganizeResponse> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY not set');
+    // Return mock response when API key is not set (for testing)
+    return {
+      doToday: ['Buy milk', 'Schedule dentist appointment'],
+      thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+      kids: [],
+      home: ['Fix the kitchen sink'],
+      errands: ['Buy milk'],
+      meals: ['Plan weekly menu'],
+      messages: ['Call mom'],
+      holdingForLater: [],
+      work: [],
+      momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+      taskMeta: [],
+      trackingItems: [],
+      rhythmInsights: {
+        topCategories: ['home', 'errands'],
+        recurringThemes: ['household', 'shopping'],
+        momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+      },
+    };
   }
 
   const trimmedText = text.trim();
@@ -340,35 +359,26 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
       try {
-        if (!process.env.OPENROUTER_API_KEY) {
-          const mockResponse: OrganizeResponse = {
-            doToday: ['Buy milk', 'Schedule dentist appointment'],
-            thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-            kids: [],
-            home: ['Fix the kitchen sink'],
-            errands: ['Buy milk'],
-            meals: ['Plan weekly menu'],
-            messages: ['Call mom'],
-            holdingForLater: [],
-            momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-          };
-          return mockResponse;
-        }
+        app.logger.info({ hasApiKey: !!process.env.OPENROUTER_API_KEY }, 'organize_handler_entry');
 
         const { text, kids, partnerName } = request.body;
         app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'organize_handler_start');
 
         if (!text || text.trim().length === 0) {
+          app.logger.warn({}, 'organize_empty_text');
           reply.code(400);
           return { error: 'text is required' };
         }
 
+        app.logger.info({}, 'calling_organize_ai');
         const result = await callOrganizeAI(text, kids, partnerName);
-        app.logger.info({ categoriesCount: Object.keys(result).length }, 'organize_success');
+        app.logger.info({ resultKeys: Object.keys(result) }, 'organize_success');
         return result;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         const errorStack = error instanceof Error ? error.stack : undefined;
+        app.logger.error({ err: error, errorMsg, errorStack, errorType: typeof error }, 'organize_exception_caught');
+
         if (isRateLimitError(error)) {
           app.logger.warn({ errorMsg }, 'organize_rate_limited');
           reply.code(429);
@@ -377,7 +387,7 @@ export function register(app: App, fastify: FastifyInstance) {
             message: 'Mom Brain needs a minute to catch up. Try again shortly.',
           };
         }
-        app.logger.error({ err: error, errorMsg, errorStack }, 'organize_failed');
+
         reply.code(500);
         return {
           error: 'server_error',
