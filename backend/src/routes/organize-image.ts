@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { App } from '../index.js';
-import { callOrganizeAI, ORGANIZE_SYSTEM_PROMPT } from './organize.js';
+import { callOrganizeAI } from './organize.js';
 import type { OrganizeResponse } from './organize.js';
 
 interface ImageData {
@@ -172,9 +172,10 @@ export function register(app: App, fastify: FastifyInstance) {
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(img.base64)) {
           return reply.status(400).send({ error: 'base64 data is invalid' });
         }
-        // Validate mimeType is an image type
-        if (!img.mimeType.startsWith('image/')) {
-          return reply.status(400).send({ error: 'mimeType must be an image type (image/png, image/jpeg, etc.)' });
+        // Validate mimeType is one of the allowed image types
+        const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+        if (!allowedMimeTypes.includes(img.mimeType)) {
+          return reply.status(400).send({ error: `mimeType must be one of: ${allowedMimeTypes.join(', ')}` });
         }
       }
 
@@ -209,18 +210,20 @@ export function register(app: App, fastify: FastifyInstance) {
         const apiKey = process.env.OPENROUTER_API_KEY;
 
         // Step 1: Vision extraction
-        const visionSystemPrompt = `You are a vision assistant for Mom Brain, an app that helps busy parents organize their mental load. Your job is to read screenshots and extract actionable content.
+        const visionSystemPrompt = `You are a vision assistant for a parent task-management app called Mom Brain.
 
-RULES:
-- Only extract text that is literally visible in the image
-- Extract only actionable items: tasks, deadlines, requests, reminders, things to buy/do/remember
-- Each distinct item should be on a separate line
-- Mark unclear or ambiguous details with [confirm]
-- Ignore: casual conversation, reactions, ads, decorative text, UI chrome
-- If the image is blank, a photo, a selfie, a meme, or contains NO readable text → respond with exactly: NO_ACTIONABLE_CONTENT
-- If text exists but none is actionable (jokes, news, unrelated chat) → respond with exactly: NO_ACTIONABLE_CONTENT
-- Do NOT invent, imagine, or guess content not visibly present
-- Do NOT add tasks based on what a parent "might" need to do`;
+Your ONLY job is to read text that is literally visible in the image and extract actionable items.
+
+Rules:
+- Extract ONLY tasks, deadlines, requests, reminders, things to buy/do/remember that are visibly written in the image.
+- Return each distinct actionable item on its own line.
+- Mark any unclear or ambiguous details with [confirm].
+- Ignore casual conversation, reactions, ads, decorative text, and UI chrome.
+- If the image is blank, a photo with no text, a selfie, a meme, or contains NO readable text at all, respond with exactly: NO_ACTIONABLE_CONTENT
+- If the image contains text but NONE of it is actionable (e.g. only jokes, news headlines, or unrelated chat), respond with exactly: NO_ACTIONABLE_CONTENT
+- Do NOT invent, imagine, or guess content that is not visibly present in the image.
+- Do NOT add tasks based on what a parent might need to do.
+- Do NOT hallucinate text that you cannot actually see in the image.`;
 
         let extractedText: string | null = null;
         let lastError: unknown;
