@@ -1,3 +1,4 @@
+// redeploy: pick up OPENROUTER_API_KEY
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { App } from '../index.js';
@@ -338,43 +339,46 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: OrganizeRequestBody }>, reply: FastifyReply) => {
-      if (!process.env.OPENROUTER_API_KEY) {
-        const mockResponse: OrganizeResponse = {
-          doToday: ['Buy milk', 'Schedule dentist appointment'],
-          thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
-          kids: [],
-          home: ['Fix the kitchen sink'],
-          errands: ['Buy milk'],
-          meals: ['Plan weekly menu'],
-          messages: ['Call mom'],
-          holdingForLater: [],
-          momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
-        };
-        return reply.send(mockResponse);
-      }
-
-      const { text, kids, partnerName } = request.body;
-      app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'POST /api/organize');
-
-      if (!text || text.trim().length === 0) {
-        return reply.code(400).send({ error: 'text is required' });
-      }
-
       try {
+        const { text, kids, partnerName } = request.body;
+        app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName, hasApiKey: !!process.env.OPENROUTER_API_KEY }, 'organize_handler_start');
+
+        if (!text || text.trim().length === 0) {
+          reply.code(400);
+          return { error: 'text is required' };
+        }
+
+        if (!process.env.OPENROUTER_API_KEY) {
+          app.logger.info({}, 'organize_test_mode');
+          const mockResponse: OrganizeResponse = {
+            doToday: ['Buy milk', 'Schedule dentist appointment'],
+            thisWeek: ['Fix the kitchen sink', 'Plan weekly menu'],
+            kids: [],
+            home: ['Fix the kitchen sink'],
+            errands: ['Buy milk'],
+            meals: ['Plan weekly menu'],
+            messages: ['Call mom'],
+            holdingForLater: [],
+            momCheckIn: 'You have several tasks to handle this week. Start with calling your mom and buying milk.',
+          };
+          return reply.status(200).send(mockResponse);
+        }
+
         const result = await callOrganizeAI(text, kids, partnerName);
         app.logger.info({ categoriesCount: Object.keys(result).length }, 'organize_success');
-        return reply.send(result);
+        return reply.status(200).send(result);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
         if (isRateLimitError(error)) {
           app.logger.warn({ errorMsg }, 'organize_rate_limited');
-          return reply.code(429).send({
+          return reply.status(429).send({
             error: 'rate_limited',
             message: 'Mom Brain needs a minute to catch up. Try again shortly.',
           });
         }
-        app.logger.error({ err: error, errorMsg }, 'organize_failed');
-        return reply.code(500).send({
+        app.logger.error({ err: error, errorMsg, errorStack }, 'organize_failed');
+        return reply.status(500).send({
           error: 'server_error',
           message: 'Something got tangled. Try again.',
         });
