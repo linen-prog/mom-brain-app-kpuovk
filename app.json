@@ -24,7 +24,13 @@
         "foregroundImage": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app"
+      "package": "com.hersomatic.mombrain",
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/newly.png",
@@ -39,6 +45,12 @@
         "expo-audio",
         {
           "microphonePermission": "Mom Brain uses your microphone so you can talk it out instead of typing."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mom Brain uses your photo library so you can scan screenshots of texts, newsletters, and reminders to extract tasks."
         }
       ],
       "@bacons/apple-targets"
