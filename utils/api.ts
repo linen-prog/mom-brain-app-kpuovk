@@ -1,6 +1,6 @@
 import { KidProfile, TaskMeta, TrackingItem, RhythmInsight } from '@/utils/storage';
 
-export const BACKEND_URL = 'https://dquu5k3ghhrbb3rjpvqbshwn8u7w2tkw.app.specular.dev';
+export const BACKEND_URL = 'https://m2peqerqdjfgzaqymv2vasetgr2u3c3k.app.specular.dev';
 
 export interface OrganizeResponse {
   doToday: string[];
