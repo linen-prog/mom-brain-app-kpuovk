@@ -1,15 +1,13 @@
 import AppIntents
-import Foundation
+
+@main
+struct MomBrainIntentExtension: AppIntentsExtension {}
 
 @available(iOS 16.0, *)
 struct RecordIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Mom Brain to Record"
     static let description = IntentDescription("Opens Mom Brain and starts recording your brain dump immediately.")
-
     static let suggestedInvocationPhrase: String = "Open Mom Brain to record"
-
-    // openAppWhenRun = true opens the app; the deep link is handled via
-    // the app's onOpenURL / Linking listener which checks for autoRecord=true
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
