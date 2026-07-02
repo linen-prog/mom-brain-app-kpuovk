@@ -6,12 +6,12 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Sparkles } from 'lucide-react-native';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
-import { getLatestDump, OrganizedDump, TrackingItem } from '@/utils/storage';
+import { getLatestDump, getDumpHistory, OrganizedDump, TrackingItem, TaskMeta } from '@/utils/storage';
 import { EmptyState } from '@/components/EmptyState';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -107,11 +107,11 @@ function StatBubble({ color, icon, count, label }: { color: string; icon: Feathe
   );
 }
 
-function CategoryRow({ meta, count }: { meta: CategoryMeta; count: number }) {
+function CategoryRow({ meta, count, onPress }: { meta: CategoryMeta; count: number; onPress: () => void }) {
   const bg = meta.color + '33';
   const countText = `${count} item${count !== 1 ? 's' : ''}`;
   return (
-    <View style={styles.categoryRow}>
+    <TouchableOpacity style={styles.categoryRow} onPress={onPress} activeOpacity={0.7}>
       <View style={[styles.categoryIconCircle, { backgroundColor: bg }]}>
         <Feather name={meta.icon} size={18} color={meta.color} />
       </View>
@@ -121,21 +121,41 @@ function CategoryRow({ meta, count }: { meta: CategoryMeta; count: number }) {
       </View>
       <Text style={styles.categoryCount}>{countText}</Text>
       <Feather name="chevron-right" size={16} color={Colors.textMuted} />
-    </View>
+    </TouchableOpacity>
   );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function formatWeekLabel(createdAt: string): string {
+  const d = new Date(createdAt);
+  return `Week of ${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+function getAttentionIcon(item: string, source: 'message' | 'taskMeta', taskMeta?: TaskMeta): FeatherIconName {
+  if (source === 'message') return 'mail';
+  if (taskMeta?.isPartnerTask) return 'user';
+  return 'check-circle';
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function RhythmScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [dump, setDump] = useState<OrganizedDump | null>(null);
+  const [history, setHistory] = useState<OrganizedDump[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Rhythm] screen focused — loading latest dump');
-      getLatestDump().then((d) => {
+      console.log('[Rhythm] screen focused — loading latest dump and history');
+      Promise.all([getLatestDump(), getDumpHistory()]).then(([d, h]) => {
         setDump(d);
+        setHistory(h);
+        setHistoryIndex(0);
       });
     }, [])
   );
@@ -144,24 +164,40 @@ export default function RhythmScreen() {
     console.log('[Rhythm] "Go to Dump" pressed from empty state');
   }, []);
 
-  const handleThisWeekPill = useCallback(() => {
-    console.log('[Rhythm] "This Week" pill pressed');
-  }, []);
+  const handlePrevWeek = useCallback(() => {
+    console.log('[Rhythm] prev week chevron pressed — historyIndex:', historyIndex + 1);
+    setHistoryIndex((i) => i + 1);
+  }, [historyIndex]);
 
-  const handleViewAllThemes = useCallback(() => {
-    console.log('[Rhythm] "View all" themes pressed');
-  }, []);
+  const handleNextWeek = useCallback(() => {
+    console.log('[Rhythm] next week chevron pressed — historyIndex:', historyIndex - 1);
+    setHistoryIndex((i) => i - 1);
+  }, [historyIndex]);
+
+  const handleViewAllThemes = useCallback((dumpId: string) => {
+    console.log('[Rhythm] "View all" themes pressed — navigating to category-detail, dumpId:', dumpId);
+    router.push({ pathname: '/category-detail', params: { dumpId } });
+  }, [router]);
 
   const handleSeeCalendar = useCallback(() => {
     console.log('[Rhythm] "See calendar" pressed');
   }, []);
 
-  const handleReview = useCallback(() => {
-    console.log('[Rhythm] "Review" attention items pressed');
-  }, []);
+  const handleReview = useCallback((dumpId: string) => {
+    console.log('[Rhythm] "Review" attention items pressed — dumpId:', dumpId);
+    router.push({ pathname: '/category-detail', params: { dumpId } });
+  }, [router]);
+
+  const handleCategoryRowPress = useCallback((cat: CategoryKey, dumpId: string) => {
+    console.log('[Rhythm] category row pressed —', cat, '| dumpId:', dumpId);
+    router.push({ pathname: '/category-detail', params: { dumpId } });
+  }, [router]);
+
+  // ── Displayed dump (history-aware) ──
+  const displayDump = history.length > 0 ? (history[historyIndex] ?? dump) : dump;
 
   // ── Empty state ──
-  if (!dump) {
+  if (!displayDump) {
     return (
       <View style={[styles.flex, { paddingTop: insets.top }]}>
         <View style={styles.header}>
@@ -170,10 +206,9 @@ export default function RhythmScreen() {
               <Text style={styles.title}>Rhythm</Text>
               <Sparkles size={20} color={Colors.primaryDeepRose} style={styles.sparkleIcon} />
             </View>
-            <TouchableOpacity style={styles.weekPill} onPress={handleThisWeekPill} activeOpacity={0.8}>
+            <View style={styles.weekPill}>
               <Text style={styles.weekPillText}>This Week</Text>
-              <Feather name="chevron-down" size={14} color={Colors.textMain} />
-            </TouchableOpacity>
+            </View>
           </View>
           <Text style={styles.subtitle}>Your week at a glance</Text>
         </View>
@@ -189,47 +224,50 @@ export default function RhythmScreen() {
   }
 
   // ── Derived data ──
-  const totalTasks = ALL_CATEGORIES.reduce((sum, cat) => sum + (dump[cat]?.length ?? 0), 0);
-  const completedCount = Object.values(dump.completed ?? {}).filter(Boolean).length;
-  const eventsCount = dump.trackingItems?.length ?? 0;
-  const momCheckInCount = dump.momCheckIn ? 1 : 0;
-  const weekRange = getWeekRange(dump.createdAt);
+  const totalTasks = ALL_CATEGORIES.reduce((sum, cat) => sum + (displayDump[cat]?.length ?? 0), 0);
+  const eventsCount = displayDump.trackingItems?.length ?? 0;
+  const momCheckInCount = displayDump.momCheckIn ? 1 : 0;
+  const weekRange = getWeekRange(displayDump.createdAt);
+
+  const canGoPrev = historyIndex < history.length - 1;
+  const canGoNext = historyIndex > 0;
+  const weekLabel = historyIndex === 0 ? 'This Week' : formatWeekLabel(displayDump.createdAt);
 
   // Top themes
   const themesWithCounts = ALL_CATEGORIES
-    .map((cat) => ({ cat, count: dump[cat]?.length ?? 0 }))
+    .map((cat) => ({ cat, count: displayDump[cat]?.length ?? 0 }))
     .filter(({ count }) => count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 3);
 
   // Coming up
-  const trackingItems = dump.trackingItems ?? [];
+  const trackingItems = displayDump.trackingItems ?? [];
   const groupedTracking = groupTrackingByDate(trackingItems);
 
-  // Needs your attention
-  const attentionItems: string[] = [];
-  if (dump.taskMeta) {
-    dump.taskMeta.forEach((meta) => {
+  // Needs your attention — track source for icon logic
+  type AttentionEntry = { text: string; source: 'message' | 'taskMeta'; taskMeta?: TaskMeta };
+  const attentionEntries: AttentionEntry[] = [];
+  if (displayDump.taskMeta) {
+    displayDump.taskMeta.forEach((meta) => {
       if (meta.delegation === 'partner' || meta.isPartnerTask) {
-        attentionItems.push(meta.taskText);
+        attentionEntries.push({ text: meta.taskText, source: 'taskMeta', taskMeta: meta });
       }
     });
   }
-  const messageItems = dump.messages ?? [];
+  const messageItems = displayDump.messages ?? [];
   messageItems.forEach((msg) => {
-    if (!attentionItems.includes(msg)) {
-      attentionItems.push(msg);
+    if (!attentionEntries.find((e) => e.text === msg)) {
+      attentionEntries.push({ text: msg, source: 'message' });
     }
   });
 
-  const momMessage = dump.momCheckIn || "You're doing a lot.";
-  const momSubtitle = dump.momCheckIn
-    ? dump.momCheckIn
+  const momSubtitle = displayDump.momCheckIn
+    ? displayDump.momCheckIn
     : "Mom Brain is here to help you carry less.";
 
-  const tasksLabel = `${totalTasks}`;
-  const eventsLabel = `${eventsCount}`;
-  const checkInsLabel = `${momCheckInCount}`;
+  const tasksCount = totalTasks;
+  const eventsCountNum = eventsCount;
+  const checkInsCount = momCheckInCount;
 
   return (
     <ScrollView
@@ -247,10 +285,25 @@ export default function RhythmScreen() {
             <Text style={styles.title}>Rhythm</Text>
             <Sparkles size={20} color={Colors.primaryDeepRose} style={styles.sparkleIcon} />
           </View>
-          <TouchableOpacity style={styles.weekPill} onPress={handleThisWeekPill} activeOpacity={0.8}>
-            <Text style={styles.weekPillText}>This Week</Text>
-            <Feather name="chevron-down" size={14} color={Colors.textMain} />
-          </TouchableOpacity>
+          <View style={styles.weekPill}>
+            <TouchableOpacity
+              onPress={handlePrevWeek}
+              disabled={!canGoPrev}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+            >
+              <Feather name="chevron-left" size={16} color={canGoPrev ? Colors.textMain : Colors.textMuted} />
+            </TouchableOpacity>
+            <Text style={styles.weekPillText}>{weekLabel}</Text>
+            <TouchableOpacity
+              onPress={handleNextWeek}
+              disabled={!canGoNext}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+            >
+              <Feather name="chevron-right" size={16} color={canGoNext ? Colors.textMain : Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={styles.subtitle}>Your week at a glance</Text>
       </View>
@@ -260,9 +313,9 @@ export default function RhythmScreen() {
         <Text style={styles.cardTitle}>This week's snapshot</Text>
         <Text style={styles.weekRangeText}>{weekRange}</Text>
         <View style={styles.statRow}>
-          <StatBubble color={Colors.primaryDeepRose} icon="check-circle" count={Number(tasksLabel)} label="Tasks captured" />
-          <StatBubble color={Colors.honey} icon="calendar" count={Number(eventsLabel)} label="Events planned" />
-          <StatBubble color={Colors.lavender} icon="heart" count={Number(checkInsLabel)} label="Mom check-ins" />
+          <StatBubble color={Colors.primaryDeepRose} icon="check-circle" count={tasksCount} label="Tasks captured" />
+          <StatBubble color={Colors.honey} icon="calendar" count={eventsCountNum} label="Events planned" />
+          <StatBubble color={Colors.lavender} icon="heart" count={checkInsCount} label="Mom check-ins" />
         </View>
       </View>
 
@@ -271,14 +324,18 @@ export default function RhythmScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Top themes this week</Text>
-            <TouchableOpacity onPress={handleViewAllThemes} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => handleViewAllThemes(displayDump.id)} activeOpacity={0.7}>
               <Text style={styles.linkText}>View all</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.categoryList}>
             {themesWithCounts.map(({ cat, count }, idx) => (
               <View key={cat}>
-                <CategoryRow meta={CATEGORY_META[cat]} count={count} />
+                <CategoryRow
+                  meta={CATEGORY_META[cat]}
+                  count={count}
+                  onPress={() => handleCategoryRowPress(cat, displayDump.id)}
+                />
                 {idx < themesWithCounts.length - 1 && <View style={styles.divider} />}
               </View>
             ))}
@@ -330,29 +387,32 @@ export default function RhythmScreen() {
       </View>
 
       {/* ── Needs your attention card ── */}
-      {attentionItems.length > 0 && (
+      {attentionEntries.length > 0 && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Needs your attention</Text>
-            <TouchableOpacity onPress={handleReview} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => handleReview(displayDump.id)} activeOpacity={0.7}>
               <Text style={styles.linkText}>Review</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.attentionList}>
-            {attentionItems.slice(0, 5).map((item, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.attentionRow}
-                activeOpacity={0.75}
-                onPress={() => console.log('[Rhythm] attention item pressed:', item)}
-              >
-                <View style={styles.attentionIconCircle}>
-                  <Feather name="mail" size={16} color={Colors.primaryDeepRose} />
-                </View>
-                <Text style={styles.attentionItemText} numberOfLines={2}>{item}</Text>
-                <Feather name="chevron-right" size={16} color={Colors.textMuted} />
-              </TouchableOpacity>
-            ))}
+            {attentionEntries.slice(0, 5).map((entry, idx) => {
+              const iconName = getAttentionIcon(entry.text, entry.source, entry.taskMeta);
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.attentionRow}
+                  activeOpacity={0.75}
+                  onPress={() => console.log('[Rhythm] attention item pressed:', entry.text)}
+                >
+                  <View style={styles.attentionIconCircle}>
+                    <Feather name={iconName} size={16} color={Colors.primaryDeepRose} />
+                  </View>
+                  <Text style={styles.attentionItemText} numberOfLines={2}>{entry.text}</Text>
+                  <Feather name="chevron-right" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       )}

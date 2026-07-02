@@ -85,6 +85,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="email-draft" options={{ headerShown: false }} />
                 <Stack.Screen name="screenshot-review" options={{ title: 'Review Extracted Tasks', headerShown: true }} />
+                <Stack.Screen name="category-detail" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style="dark" />
             </GestureHandlerRootView>

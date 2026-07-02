@@ -32,6 +32,7 @@ import { organizeText, organizeImages, OrganizeError, OrganizeResponse } from '@
 import {
   getLatestDump,
   saveLatestDump,
+  saveDumpToHistory,
   OrganizedDump,
   getKids,
   getPartnerName,
@@ -319,6 +320,7 @@ export default function DumpScreen() {
         inputSource: currentSource,
       };
       await saveLatestDump(dump);
+      await saveDumpToHistory(dump);
       setResult(dump);
       setLastOrganized(dump.createdAt);
       setText('');

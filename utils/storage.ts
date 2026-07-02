@@ -117,7 +117,34 @@ export async function addItemToCategory(
   }
 }
 
-const HISTORY_KEY = 'mombrain.dumpHistory';
+export const HISTORY_KEY = 'mombrain.dumpHistory';
+
+const MAX_HISTORY = 12;
+
+export async function saveDumpToHistory(dump: OrganizedDump): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(HISTORY_KEY);
+    const history: OrganizedDump[] = raw ? JSON.parse(raw) : [];
+    const filtered = history.filter(d => d.id !== dump.id);
+    const updated = [dump, ...filtered].slice(0, MAX_HISTORY);
+    await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+    console.log('[Storage] saveDumpToHistory — saved id:', dump.id, 'total:', updated.length);
+  } catch (err) {
+    console.error('[Storage] saveDumpToHistory error:', err);
+  }
+}
+
+export async function getDumpHistory(): Promise<OrganizedDump[]> {
+  try {
+    const raw = await AsyncStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const history = JSON.parse(raw) as OrganizedDump[];
+    return history.map(d => ({ ...d, work: Array.isArray(d.work) ? d.work : [] }));
+  } catch (err) {
+    console.error('[Storage] getDumpHistory error:', err);
+    return [];
+  }
+}
 
 export async function clearLatestDump(): Promise<void> {
   try {
