@@ -420,6 +420,41 @@ export default function DumpScreen() {
     handleMicPress();
   }, [handleMicPress]);
 
+  // ── Siri autoRecord deep-link detection ─────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    // Cold launch: app was closed, Siri opened it via deep link
+    Linking.getInitialURL().then((url) => {
+      if (!cancelled && url && url.includes('autoRecord=true')) {
+        console.log('[Siri] Cold launch autoRecord detected — url:', url);
+        // Small delay to ensure the component is fully mounted and audio is ready
+        setTimeout(() => {
+          if (!cancelled) {
+            console.log('[Siri] Triggering handleMicPress from cold launch');
+            handleMicPress();
+          }
+        }, 800);
+      }
+    });
+
+    // Foreground: app is already open, Siri fires a URL event
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (url && url.includes('autoRecord=true')) {
+        console.log('[Siri] Foreground autoRecord detected — url:', url);
+        setTimeout(() => {
+          console.log('[Siri] Triggering handleMicPress from foreground');
+          handleMicPress();
+        }, 300);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [handleMicPress]);
+
   const handleOpenSettings = useCallback(() => {
     console.log('[Voice] Opening device Settings for microphone permission');
     Linking.openSettings();

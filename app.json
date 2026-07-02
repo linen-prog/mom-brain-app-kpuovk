@@ -39,7 +39,8 @@
         {
           "microphonePermission": "Mom Brain uses your microphone so you can talk it out instead of typing."
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "scheme": "mombrain",
     "experiments": {
