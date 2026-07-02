@@ -15,7 +15,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hersomatic.mombrain",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Mom Brain uses your photo library so you can scan screenshots of texts, newsletters, and reminders to extract tasks."
       }
     },
     "android": {
