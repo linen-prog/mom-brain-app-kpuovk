@@ -1,29 +1,135 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  Animated,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Sparkles } from 'lucide-react-native';
+import { Feather } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { getLatestDump, OrganizedDump, TrackingItem } from '@/utils/storage';
-import { getRhythmRecap, RhythmRecapResponse } from '@/utils/api';
 import { EmptyState } from '@/components/EmptyState';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type CategoryKey = 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work';
+type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
+
+interface CategoryMeta {
+  label: string;
+  subtitle: string;
+  color: string;
+  icon: FeatherIconName;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const ALL_CATEGORIES: CategoryKey[] = ['doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work'];
+
+const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
+  kids:     { label: 'Kids & School',  subtitle: 'Field trip, forms, schedules',       color: '#E8A0A0', icon: 'users' },
+  home:     { label: 'Home & Life',    subtitle: 'Groceries, cleaning, errands',        color: '#F5C842', icon: 'shopping-bag' },
+  errands:  { label: 'Errands',        subtitle: 'Pickups, returns, stops',             color: '#8FBC8F', icon: 'map-pin' },
+  meals:    { label: 'Meals',          subtitle: 'Dinner, snacks, groceries',           color: '#F4A460', icon: 'coffee' },
+  messages: { label: 'Messages',       subtitle: 'Texts, emails, follow-ups',           color: '#87CEEB', icon: 'message-circle' },
+  doToday:  { label: 'Do Today',       subtitle: 'Urgent, time-sensitive',              color: '#E8A0A0', icon: 'clock' },
+  thisWeek: { label: 'Plans & Events', subtitle: 'Practices, birthdays, appointments',  color: '#C8A8E8', icon: 'calendar' },
+  work:     { label: 'Work',           subtitle: 'Deadlines, meetings, tasks',          color: '#A8C8E8', icon: 'briefcase' },
+};
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getWeekRange(createdAt: string): string {
+  const dumpDate = new Date(createdAt);
+  const dayOfWeek = dumpDate.getDay();
+  const monday = new Date(dumpDate);
+  monday.setDate(dumpDate.getDate() - ((dayOfWeek + 6) % 7));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const monStr = `${MONTH_NAMES[monday.getMonth()]} ${monday.getDate()}`;
+  const sunStr = `${MONTH_NAMES[sunday.getMonth()]} ${sunday.getDate()}`;
+  return `${monStr} – ${sunStr}`;
+}
+
+function groupTrackingByDate(items: TrackingItem[]): { label: string; dayNum: string; items: TrackingItem[] }[] {
+  const groups: Record<string, TrackingItem[]> = {};
+  const order: string[] = [];
+  items.forEach((item) => {
+    const key = item.dueDate ?? 'No date';
+    if (!groups[key]) {
+      groups[key] = [];
+      order.push(key);
+    }
+    groups[key].push(item);
+  });
+  return order.map((key) => {
+    let label = key;
+    let dayNum = '';
+    if (key !== 'No date') {
+      const d = new Date(key);
+      if (!isNaN(d.getTime())) {
+        const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+        label = days[d.getDay()];
+        dayNum = String(d.getDate());
+      }
+    }
+    return { label, dayNum, items: groups[key] };
+  });
+}
+
+function extractTimeFromText(text: string): { time: string; clean: string } {
+  const match = text.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/);
+  if (match) {
+    return { time: match[1], clean: text.replace(match[0], '').trim().replace(/^[-–,\s]+|[-–,\s]+$/g, '') };
+  }
+  return { time: '', clean: text };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatBubble({ color, icon, count, label }: { color: string; icon: FeatherIconName; count: number; label: string }) {
+  const bg = color + '33';
+  const border = color + '66';
+  return (
+    <View style={styles.statBubbleWrapper}>
+      <View style={[styles.statBubble, { backgroundColor: bg, borderColor: border }]}>
+        <Feather name={icon} size={16} color={color} />
+        <Text style={[styles.statCount, { color: Colors.textMain }]}>{count}</Text>
+      </View>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function CategoryRow({ meta, count }: { meta: CategoryMeta; count: number }) {
+  const bg = meta.color + '33';
+  const countText = `${count} item${count !== 1 ? 's' : ''}`;
+  return (
+    <View style={styles.categoryRow}>
+      <View style={[styles.categoryIconCircle, { backgroundColor: bg }]}>
+        <Feather name={meta.icon} size={18} color={meta.color} />
+      </View>
+      <View style={styles.categoryRowText}>
+        <Text style={styles.categoryRowTitle}>{meta.label}</Text>
+        <Text style={styles.categoryRowSubtitle}>{meta.subtitle}</Text>
+      </View>
+      <Text style={styles.categoryCount}>{countText}</Text>
+      <Feather name="chevron-right" size={16} color={Colors.textMuted} />
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function RhythmScreen() {
   const insets = useSafeAreaInsets();
   const [dump, setDump] = useState<OrganizedDump | null>(null);
-  const [recap, setRecap] = useState<RhythmRecapResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const recapOpacity = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -34,69 +140,42 @@ export default function RhythmScreen() {
     }, [])
   );
 
-  const handleGenerateRecap = useCallback(async () => {
-    if (!dump) return;
-    console.log('[Rhythm] "Generate This Week\'s Recap" pressed');
-    setLoading(true);
-    setError(null);
-    recapOpacity.setValue(0);
-
-    // Build completed / pending lists from all categories
-    const allCategories: (keyof OrganizedDump)[] = [
-      'doToday', 'thisWeek', 'kids', 'home', 'errands', 'meals', 'messages', 'work',
-    ];
-
-    const completedTasks: string[] = [];
-    const pendingTasks: string[] = [];
-
-    allCategories.forEach((cat) => {
-      const items = dump[cat] as string[] | undefined;
-      if (!Array.isArray(items)) return;
-      items.forEach((item, index) => {
-        const key = `${cat}:${index}`;
-        if (dump.completed?.[key]) {
-          completedTasks.push(item);
-        } else {
-          pendingTasks.push(item);
-        }
-      });
-    });
-
-    const trackingItems: TrackingItem[] = dump.trackingItems ?? [];
-
-    console.log('[Rhythm] recap params — completed:', completedTasks.length, '| pending:', pendingTasks.length, '| tracking:', trackingItems.length);
-
-    try {
-      const result = await getRhythmRecap({ completedTasks, pendingTasks, trackingItems });
-      setRecap(result);
-      Animated.timing(recapOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-    } catch (err) {
-      console.error('[Rhythm] getRhythmRecap error:', err);
-      setError("Couldn't generate your recap. Check your connection and try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [dump, recapOpacity]);
-
-  const handleRefreshRecap = useCallback(() => {
-    console.log('[Rhythm] "Refresh Recap" pressed');
-    setRecap(null);
-    handleGenerateRecap();
-  }, [handleGenerateRecap]);
-
   const handleGoDump = useCallback(() => {
     console.log('[Rhythm] "Go to Dump" pressed from empty state');
   }, []);
 
+  const handleThisWeekPill = useCallback(() => {
+    console.log('[Rhythm] "This Week" pill pressed');
+  }, []);
+
+  const handleViewAllThemes = useCallback(() => {
+    console.log('[Rhythm] "View all" themes pressed');
+  }, []);
+
+  const handleSeeCalendar = useCallback(() => {
+    console.log('[Rhythm] "See calendar" pressed');
+  }, []);
+
+  const handleReview = useCallback(() => {
+    console.log('[Rhythm] "Review" attention items pressed');
+  }, []);
+
+  // ── Empty state ──
   if (!dump) {
     return (
       <View style={[styles.flex, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title}>Rhythm</Text>
-            <Text style={styles.titleHeart}> ♡</Text>
+          <View style={styles.headerTopRow}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>Rhythm</Text>
+              <Sparkles size={20} color={Colors.primaryDeepRose} style={styles.sparkleIcon} />
+            </View>
+            <TouchableOpacity style={styles.weekPill} onPress={handleThisWeekPill} activeOpacity={0.8}>
+              <Text style={styles.weekPillText}>This Week</Text>
+              <Feather name="chevron-down" size={14} color={Colors.textMain} />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>Your week at a glance.</Text>
+          <Text style={styles.subtitle}>Your week at a glance</Text>
         </View>
         <EmptyState
           icon={<Sparkles size={32} color={Colors.lavender} />}
@@ -109,152 +188,195 @@ export default function RhythmScreen() {
     );
   }
 
-  const weekLabelDisplay = recap?.weekLabel ?? '';
-  const momMessage = recap?.momMessage ?? '';
-  const doneThisWeek = recap?.doneThisWeek ?? [];
-  const rollingOver = recap?.rollingOver ?? [];
-  const comingUp = recap?.comingUp ?? [];
+  // ── Derived data ──
+  const totalTasks = ALL_CATEGORIES.reduce((sum, cat) => sum + (dump[cat]?.length ?? 0), 0);
+  const completedCount = Object.values(dump.completed ?? {}).filter(Boolean).length;
+  const eventsCount = dump.trackingItems?.length ?? 0;
+  const momCheckInCount = dump.momCheckIn ? 1 : 0;
+  const weekRange = getWeekRange(dump.createdAt);
+
+  // Top themes
+  const themesWithCounts = ALL_CATEGORIES
+    .map((cat) => ({ cat, count: dump[cat]?.length ?? 0 }))
+    .filter(({ count }) => count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
+  // Coming up
+  const trackingItems = dump.trackingItems ?? [];
+  const groupedTracking = groupTrackingByDate(trackingItems);
+
+  // Needs your attention
+  const attentionItems: string[] = [];
+  if (dump.taskMeta) {
+    dump.taskMeta.forEach((meta) => {
+      if (meta.delegation === 'partner' || meta.isPartnerTask) {
+        attentionItems.push(meta.taskText);
+      }
+    });
+  }
+  const messageItems = dump.messages ?? [];
+  messageItems.forEach((msg) => {
+    if (!attentionItems.includes(msg)) {
+      attentionItems.push(msg);
+    }
+  });
+
+  const momMessage = dump.momCheckIn || "You're doing a lot.";
+  const momSubtitle = dump.momCheckIn
+    ? dump.momCheckIn
+    : "Mom Brain is here to help you carry less.";
+
+  const tasksLabel = `${totalTasks}`;
+  const eventsLabel = `${eventsCount}`;
+  const checkInsLabel = `${momCheckInCount}`;
 
   return (
     <ScrollView
       style={styles.flex}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 120 },
       ]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Rhythm</Text>
-        <Text style={styles.titleHeart}> ♡</Text>
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <View style={styles.headerTopRow}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Rhythm</Text>
+            <Sparkles size={20} color={Colors.primaryDeepRose} style={styles.sparkleIcon} />
+          </View>
+          <TouchableOpacity style={styles.weekPill} onPress={handleThisWeekPill} activeOpacity={0.8}>
+            <Text style={styles.weekPillText}>This Week</Text>
+            <Feather name="chevron-down" size={14} color={Colors.textMain} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.subtitle}>Your week at a glance</Text>
       </View>
-      <Text style={styles.subtitle}>Your week at a glance.</Text>
 
-      {/* Generate button — only shown when no recap yet */}
-      {!recap && !loading && (
-        <TouchableOpacity
-          style={styles.generateButton}
-          onPress={handleGenerateRecap}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.generateButtonText}>Generate This Week's Recap  ✦</Text>
-        </TouchableOpacity>
-      )}
+      {/* ── Snapshot card ── */}
+      <View style={[styles.card, styles.snapshotCard]}>
+        <Text style={styles.cardTitle}>This week's snapshot</Text>
+        <Text style={styles.weekRangeText}>{weekRange}</Text>
+        <View style={styles.statRow}>
+          <StatBubble color={Colors.primaryDeepRose} icon="check-circle" count={Number(tasksLabel)} label="Tasks captured" />
+          <StatBubble color={Colors.honey} icon="calendar" count={Number(eventsLabel)} label="Events planned" />
+          <StatBubble color={Colors.lavender} icon="heart" count={Number(checkInsLabel)} label="Mom check-ins" />
+        </View>
+      </View>
 
-      {/* Loading state */}
-      {loading && (
-        <View style={styles.loadingCard}>
-          <ActivityIndicator size="small" color={Colors.lavender} />
-          <Text style={styles.loadingText}>Putting your week together…</Text>
+      {/* ── Top themes card ── */}
+      {themesWithCounts.length > 0 && (
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Top themes this week</Text>
+            <TouchableOpacity onPress={handleViewAllThemes} activeOpacity={0.7}>
+              <Text style={styles.linkText}>View all</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.categoryList}>
+            {themesWithCounts.map(({ cat, count }, idx) => (
+              <View key={cat}>
+                <CategoryRow meta={CATEGORY_META[cat]} count={count} />
+                {idx < themesWithCounts.length - 1 && <View style={styles.divider} />}
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
-      {/* Error state */}
-      {error && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleGenerateRecap} activeOpacity={0.8}>
-            <Text style={styles.retryButtonText}>Try again</Text>
+      {/* ── Coming up card ── */}
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Coming up</Text>
+          <TouchableOpacity onPress={handleSeeCalendar} activeOpacity={0.7}>
+            <Text style={styles.linkText}>See calendar</Text>
           </TouchableOpacity>
+        </View>
+        {trackingItems.length === 0 ? (
+          <Text style={styles.emptyHint}>No upcoming events yet.</Text>
+        ) : (
+          <View style={styles.comingUpList}>
+            {groupedTracking.map((group, gi) => (
+              <View key={gi} style={styles.comingUpGroup}>
+                <View style={styles.comingUpDateCol}>
+                  <Text style={styles.comingUpDayLabel}>{group.label}</Text>
+                  {group.dayNum.length > 0 && (
+                    <Text style={styles.comingUpDayNum}>{group.dayNum}</Text>
+                  )}
+                </View>
+                <View style={styles.comingUpItems}>
+                  {group.items.map((item, ii) => {
+                    const parsed = extractTimeFromText(item.text);
+                    const dotColor = ii % 2 === 0 ? Colors.primaryDeepRose : Colors.lavender;
+                    return (
+                      <View key={ii} style={styles.comingUpItem}>
+                        <View style={[styles.comingUpDot, { backgroundColor: dotColor }]} />
+                        <View>
+                          <Text style={styles.comingUpItemText}>{parsed.clean}</Text>
+                          {parsed.time.length > 0 && (
+                            <Text style={styles.comingUpItemTime}>{parsed.time}</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {/* ── Needs your attention card ── */}
+      {attentionItems.length > 0 && (
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Needs your attention</Text>
+            <TouchableOpacity onPress={handleReview} activeOpacity={0.7}>
+              <Text style={styles.linkText}>Review</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.attentionList}>
+            {attentionItems.slice(0, 5).map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.attentionRow}
+                activeOpacity={0.75}
+                onPress={() => console.log('[Rhythm] attention item pressed:', item)}
+              >
+                <View style={styles.attentionIconCircle}>
+                  <Feather name="mail" size={16} color={Colors.primaryDeepRose} />
+                </View>
+                <Text style={styles.attentionItemText} numberOfLines={2}>{item}</Text>
+                <Feather name="chevron-right" size={16} color={Colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       )}
 
-      {/* Recap content */}
-      {recap && (
-        <Animated.View style={[styles.recapContainer, { opacity: recapOpacity }]}>
-          {/* Week label */}
-          {weekLabelDisplay.length > 0 && (
-            <Text style={styles.weekLabel}>{weekLabelDisplay}</Text>
-          )}
-
-          {/* FOR YOU card */}
-          {momMessage.length > 0 && (
-            <View style={styles.forYouCard}>
-              <View style={styles.forYouAccent} />
-              <Text style={styles.forYouLabel}>FOR YOU</Text>
-              <Text style={styles.forYouMessage}>{momMessage}</Text>
-              <View style={styles.forYouFooter}>
-                <Text style={styles.forYouHeart}>♥</Text>
-                <Text style={styles.forYouFooterText}>You're doing more than you know.</Text>
-              </View>
-            </View>
-          )}
-
-          {/* What got done */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: Colors.sage }]} />
-              <Text style={styles.sectionTitle}>What got done</Text>
-            </View>
-            {doneThisWeek.length === 0 ? (
-              <Text style={styles.emptyHint}>Nothing marked done yet — that's okay.</Text>
-            ) : (
-              <View style={styles.itemList}>
-                {doneThisWeek.map((item, i) => (
-                  <View key={i} style={styles.itemRow}>
-                    <Text style={styles.checkMark}>✓</Text>
-                    <Text style={styles.itemText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+      {/* ── Mom message card ── */}
+      <View style={[styles.card, styles.momCard]}>
+        <View style={styles.momCardInner}>
+          <View style={styles.momIconCircle}>
+            <Feather name="heart" size={20} color={Colors.primaryDeepRose} />
           </View>
-
-          {/* Still on your list */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: Colors.primaryBlush }]} />
-              <Text style={styles.sectionTitle}>Still on your list</Text>
-            </View>
-            <Text style={styles.sectionSubtitle}>
-              These are carrying forward, not falling behind.
-            </Text>
-            {rollingOver.length === 0 ? (
-              <Text style={styles.emptyHint}>You're all caught up.</Text>
-            ) : (
-              <View style={styles.itemList}>
-                {rollingOver.map((item, i) => (
-                  <View key={i} style={styles.itemRow}>
-                    <View style={[styles.bullet, { backgroundColor: Colors.primaryBlush }]} />
-                    <Text style={styles.itemText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+          <View style={styles.momCardText}>
+            <Text style={styles.momCardTitle}>You're doing a lot.</Text>
+            <Text style={styles.momCardSubtitle}>{momSubtitle}</Text>
           </View>
-
-          {/* Coming up */}
-          {comingUp.length > 0 && (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <View style={[styles.sectionDot, { backgroundColor: Colors.honey }]} />
-                <Text style={styles.sectionTitle}>Coming up</Text>
-              </View>
-              <View style={styles.itemList}>
-                {comingUp.map((item, i) => (
-                  <View key={i} style={styles.itemRow}>
-                    <View style={[styles.bullet, { backgroundColor: Colors.honey }]} />
-                    <Text style={styles.itemText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Refresh button */}
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={handleRefreshRecap}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.refreshButtonText}>Refresh Recap</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+        </View>
+        <View style={styles.momSparkleCorner}>
+          <Sparkles size={16} color={Colors.primaryBlush} />
+        </View>
+      </View>
     </ScrollView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   flex: {
@@ -263,159 +385,59 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    gap: 16,
+    gap: 14,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    gap: 6,
+    gap: 4,
+    marginBottom: 2,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
-    fontSize: 38,
+    fontSize: 34,
     fontFamily: 'Nunito_700Bold',
     color: Colors.textMain,
     letterSpacing: -0.5,
   },
-  titleHeart: {
-    fontSize: 28,
-    color: Colors.primaryDeepRose,
-    fontFamily: 'Nunito_700Bold',
-    marginBottom: 4,
+  sparkleIcon: {
+    marginTop: 2,
   },
   subtitle: {
-    fontSize: 17,
+    fontSize: 15,
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
-    marginTop: -4,
   },
-  generateButton: {
-    backgroundColor: Colors.primaryDeepRose,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    shadowColor: Colors.primaryDeepRose,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-    marginTop: 8,
-  },
-  generateButtonText: {
-    fontSize: 17,
-    fontFamily: 'Nunito_700Bold',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  loadingCard: {
+  weekPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: Colors.lavender + '18',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.lavender + '44',
-  },
-  loadingText: {
-    fontSize: 15,
-    fontFamily: 'Nunito_400Regular',
-    color: Colors.textBody,
-    fontStyle: 'italic',
-  },
-  errorBox: {
-    backgroundColor: '#C8846022',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#C8846044',
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#C08060',
-    fontFamily: 'Nunito_400Regular',
-    lineHeight: 20,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.primaryDeepRose + '22',
-    borderRadius: 10,
+    gap: 4,
+    backgroundColor: Colors.card,
+    borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: Colors.primaryDeepRose + '44',
+    borderColor: Colors.border,
+    shadowColor: '#3F312C',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  retryButtonText: {
-    fontSize: 13,
-    fontFamily: 'Nunito_700Bold',
-    color: Colors.primaryDeepRose,
-  },
-  recapContainer: {
-    gap: 14,
-  },
-  weekLabel: {
-    fontSize: 15,
-    fontFamily: 'Nunito_600SemiBold',
-    color: Colors.textMuted,
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  // FOR YOU card
-  forYouCard: {
-    backgroundColor: Colors.lavender + '18',
-    borderRadius: 20,
-    padding: 18,
-    paddingLeft: 22,
-    borderWidth: 1,
-    borderColor: Colors.lavender + '40',
-    overflow: 'hidden',
-    gap: 8,
-  },
-  forYouAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: Colors.lavender,
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
-  },
-  forYouLabel: {
-    fontSize: 11,
-    fontFamily: 'Nunito_700Bold',
-    color: Colors.lavender,
-    letterSpacing: 1.2,
-  },
-  forYouMessage: {
-    fontSize: 16,
-    fontFamily: 'Nunito_400Regular',
-    color: Colors.textMain,
-    lineHeight: 24,
-  },
-  forYouFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-  },
-  forYouHeart: {
+  weekPillText: {
     fontSize: 14,
-    color: Colors.lavender,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
   },
-  forYouFooterText: {
-    fontSize: 13,
-    fontFamily: 'Nunito_400Regular',
-    color: Colors.lavender,
-    fontStyle: 'italic',
-  },
-  // Section cards
-  sectionCard: {
+  // ── Cards ──
+  card: {
     backgroundColor: Colors.card,
     borderRadius: 20,
     borderWidth: 1,
@@ -426,30 +448,156 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
-    gap: 10,
+    gap: 12,
   },
-  sectionHeader: {
+  snapshotCard: {
+    backgroundColor: Colors.primaryBlush + '44',
+    borderColor: Colors.primaryBlush,
+  },
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  sectionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  sectionTitle: {
-    fontSize: 18,
+  cardTitle: {
+    fontSize: 17,
     fontFamily: 'Nunito_700Bold',
     color: Colors.textMain,
   },
-  sectionSubtitle: {
+  linkText: {
+    fontSize: 14,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.primaryDeepRose,
+  },
+  weekRangeText: {
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textBody,
+    marginTop: -6,
+  },
+  // ── Stat bubbles ──
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 4,
+  },
+  statBubbleWrapper: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  statBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  statCount: {
+    fontSize: 22,
+    fontFamily: 'Nunito_700Bold',
+    lineHeight: 26,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textBody,
+    textAlign: 'center',
+    maxWidth: 72,
+  },
+  // ── Category rows ──
+  categoryList: {
+    gap: 0,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  categoryIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryRowText: {
+    flex: 1,
+    gap: 2,
+  },
+  categoryRowTitle: {
+    fontSize: 15,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+  },
+  categoryRowSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+  },
+  categoryCount: {
     fontSize: 13,
     fontFamily: 'Nunito_400Regular',
     color: Colors.textMuted,
-    fontStyle: 'italic',
-    lineHeight: 18,
-    marginTop: -4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginLeft: 52,
+  },
+  // ── Coming up ──
+  comingUpList: {
+    gap: 14,
+  },
+  comingUpGroup: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  comingUpDateCol: {
+    width: 40,
+    alignItems: 'center',
+  },
+  comingUpDayLabel: {
+    fontSize: 11,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.primaryDeepRose,
+    letterSpacing: 0.5,
+  },
+  comingUpDayNum: {
+    fontSize: 22,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.primaryDeepRose,
+    lineHeight: 26,
+  },
+  comingUpItems: {
+    flex: 1,
+    gap: 10,
+  },
+  comingUpItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  comingUpDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 5,
+    flexShrink: 0,
+  },
+  comingUpItemText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+    lineHeight: 20,
+  },
+  comingUpItemTime: {
+    fontSize: 13,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    marginTop: 1,
   },
   emptyHint: {
     fontSize: 14,
@@ -457,45 +605,73 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontStyle: 'italic',
   },
-  itemList: {
-    gap: 8,
+  // ── Attention ──
+  attentionList: {
+    gap: 2,
   },
-  itemRow: {
+  attentionRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
   },
-  checkMark: {
-    fontSize: 14,
-    color: Colors.sage,
-    fontFamily: 'Nunito_700Bold',
-    marginTop: 3,
+  attentionIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primaryBlush + '44',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 8,
-    flexShrink: 0,
-  },
-  itemText: {
+  attentionItemText: {
     flex: 1,
     fontSize: 15,
     fontFamily: 'Nunito_400Regular',
-    color: Colors.textBody,
-    lineHeight: 22,
+    color: Colors.textMain,
+    lineHeight: 20,
   },
-  refreshButton: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.lavender + '66',
-    paddingVertical: 14,
+  // ── Mom card ──
+  momCard: {
+    backgroundColor: Colors.primaryBlush + '44',
+    borderColor: Colors.primaryBlush,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  momCardInner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.lavender + '14',
+    gap: 14,
   },
-  refreshButtonText: {
-    fontSize: 15,
-    fontFamily: 'Nunito_600SemiBold',
-    color: Colors.lavender,
+  momIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primaryDeepRose + '22',
+    borderWidth: 1,
+    borderColor: Colors.primaryDeepRose + '44',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  momCardText: {
+    flex: 1,
+    gap: 4,
+  },
+  momCardTitle: {
+    fontSize: 16,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+  },
+  momCardSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textBody,
+    lineHeight: 20,
+  },
+  momSparkleCorner: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    opacity: 0.6,
   },
 });
