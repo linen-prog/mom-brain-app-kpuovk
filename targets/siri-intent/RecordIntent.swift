@@ -6,18 +6,13 @@ struct RecordIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Mom Brain to Record"
     static let description = IntentDescription("Opens Mom Brain and starts recording your brain dump immediately.")
 
-    // This makes the intent appear as a suggested Siri phrase
     static let suggestedInvocationPhrase: String = "Open Mom Brain to record"
 
-    // Opens the app — required for intents that open the UI
+    // openAppWhenRun = true opens the app; the deep link is handled via
+    // the app's onOpenURL / Linking listener which checks for autoRecord=true
     static let openAppWhenRun: Bool = true
 
-    @MainActor
     func perform() async throws -> some IntentResult {
-        // Deep link into the Dump screen with autoRecord flag
-        if let url = URL(string: "mombrain://dump?autoRecord=true") {
-            await UIApplication.shared.open(url)
-        }
         return .result()
     }
 }
