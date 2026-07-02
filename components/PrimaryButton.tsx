@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold',
     letterSpacing: 0.2,

@@ -14,7 +14,7 @@ function TabIcon({ icon, color }: { icon: string; color: string }) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
+  const bottomPad = insets.bottom > 0 ? insets.bottom : 12;
 
   return (
     <Tabs
@@ -27,13 +27,13 @@ export default function TabLayout() {
           backgroundColor: Colors.card,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          paddingBottom: bottomPad,
+          paddingBottom: bottomPad + 2,
           paddingTop: 8,
-          height: 56 + bottomPad,
+          height: 60 + bottomPad,
           elevation: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: 'Nunito_500Medium',
           marginTop: 2,
         },

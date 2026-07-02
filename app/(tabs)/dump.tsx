@@ -715,7 +715,7 @@ export default function DumpScreen() {
               <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={16} color={Colors.primaryDeepRose} />
               <View>
                 <Text style={styles.voiceLabel}>Screenshot it</Text>
-                <Text style={styles.voiceSubLabel}>Tap to pick a photo</Text>
+                <Text style={styles.voiceSubLabel}>Add a school note, list, text, or reminder</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -738,7 +738,7 @@ export default function DumpScreen() {
               <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={16} color={Colors.primaryDeepRose} />
               <View>
                 <Text style={styles.voiceLabel}>Type it out</Text>
-                <Text style={styles.voiceSubLabel}>Tap to type your thoughts</Text>
+                <Text style={styles.voiceSubLabel}>Quickly type what's on your mind</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -862,7 +862,15 @@ export default function DumpScreen() {
 
         {/* First-time helper card */}
         {showHelper && (
-          <View style={styles.helperCard}>
+          <TouchableOpacity
+            style={styles.helperCard}
+            activeOpacity={0.75}
+            onPress={() => {
+              console.log('[Dump] Helper card "Tap to try" pressed — prefilling example text');
+              setText("I need to sign Mina's school form, order groceries, text the babysitter, and remember something for Monday…");
+              setTypedExpanded(true);
+            }}
+          >
             <View style={styles.helperCardInner}>
               <View style={styles.helperCardLeft}>
                 <View style={styles.helperLabelRow}>
@@ -870,12 +878,12 @@ export default function DumpScreen() {
                   <Text style={styles.helperLabel}>FOR EXAMPLE</Text>
                 </View>
                 <Text style={styles.helperText}>
-                  Try something like: I need to sign Mina's school form, order groceries, text the babysitter, and I think I'm forgetting something for Monday...
+                  {"I need to sign Mina's school form, order groceries, text the babysitter, and remember something for Monday…"}
                 </Text>
               </View>
-              <IconSymbol ios_icon_name="square.and.pencil" android_material_icon_name="edit" size={28} color={Colors.primaryDeepRose + '60'} />
             </View>
-          </View>
+            <Text style={styles.helperTapHint}>Tap to try this example</Text>
+          </TouchableOpacity>
         )}
 
         {/* Last organized hint */}
@@ -1219,7 +1227,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_700Bold',
   },
   cardHeading: {
-    fontSize: 17,
+    fontSize: 18,
     fontFamily: 'Nunito_700Bold',
     color: Colors.textMain,
   },
@@ -1241,12 +1249,13 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginVertical: 14,
+    marginVertical: 16,
   },
   voiceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 6,
   },
   voiceRowLeft: {
     flexDirection: 'row',
@@ -1405,6 +1414,14 @@ const styles = StyleSheet.create({
     color: Colors.textBody,
     fontFamily: 'Nunito_400Regular',
     lineHeight: 20,
+  },
+  helperTapHint: {
+    fontSize: 12,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.primaryDeepRose,
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'right',
   },
   lastOrganized: {
     fontSize: 13,
