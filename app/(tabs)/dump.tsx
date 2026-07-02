@@ -676,7 +676,7 @@ export default function DumpScreen() {
         style={styles.flex}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 80 },
+          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 100 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -696,7 +696,7 @@ export default function DumpScreen() {
           </View>
 
           {/* Voice row */}
-          <View style={styles.voiceRow}>
+          <View style={styles.rowPill}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="mic.fill" android_material_icon_name="mic" size={16} color={Colors.primaryDeepRose} />
               <View>
@@ -710,7 +710,7 @@ export default function DumpScreen() {
           <View style={styles.divider} />
 
           {/* Screenshot row */}
-          <View style={styles.voiceRow}>
+          <View style={styles.rowPill}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={16} color={Colors.primaryDeepRose} />
               <View>
@@ -733,7 +733,7 @@ export default function DumpScreen() {
           <View style={styles.divider} />
 
           {/* Type it out row */}
-          <View style={styles.voiceRow}>
+          <View style={styles.rowPill}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={16} color={Colors.primaryDeepRose} />
               <View>
@@ -1255,7 +1255,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+  },
+  rowPill: {
+    backgroundColor: Colors.primaryBlush + '18',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   voiceRowLeft: {
     flexDirection: 'row',
