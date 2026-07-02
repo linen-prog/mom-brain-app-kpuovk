@@ -16,7 +16,8 @@
       "bundleIdentifier": "com.hersomatic.mombrain",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Mom Brain uses your photo library so you can scan screenshots of texts, newsletters, and reminders to extract tasks."
+        "NSPhotoLibraryUsageDescription": "Mom Brain uses your photo library so you can scan screenshots of texts, newsletters, and reminders to extract tasks.",
+        "NSMicrophoneUsageDescription": "Mom Brain uses your microphone so you can talk it out instead of typing."
       }
     },
     "android": {
@@ -27,9 +28,13 @@
       "package": "com.hersomatic.mombrain",
       "permissions": [
         "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
         "READ_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
