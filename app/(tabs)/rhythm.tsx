@@ -5,6 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +20,8 @@ import { EmptyState } from '@/components/EmptyState';
 
 type CategoryKey = 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work';
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
+
+export type AttentionEntry = { text: string; source: 'message' | 'taskMeta'; taskMeta?: TaskMeta };
 
 interface CategoryMeta {
   label: string;
@@ -91,6 +95,12 @@ function extractTimeFromText(text: string): { time: string; clean: string } {
   return { time: '', clean: text };
 }
 
+function getAttentionIcon(item: string, source: 'message' | 'taskMeta', taskMeta?: TaskMeta): FeatherIconName {
+  if (source === 'message') return 'mail';
+  if (taskMeta?.isPartnerTask) return 'user';
+  return 'check-circle';
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatBubble({ color, icon, count, label }: { color: string; icon: FeatherIconName; count: number; label: string }) {
@@ -125,6 +135,100 @@ function CategoryRow({ meta, count, onPress }: { meta: CategoryMeta; count: numb
   );
 }
 
+// ─── ReviewModal ──────────────────────────────────────────────────────────────
+
+function ReviewModal({
+  visible,
+  entries,
+  delegated,
+  onDelegate,
+  onDraftEmail,
+  onClose,
+}: {
+  visible: boolean;
+  entries: AttentionEntry[];
+  delegated: Set<string>;
+  onDelegate: (key: string) => void;
+  onDraftEmail: (entry: AttentionEntry) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.overlay}>
+        <Pressable style={modalStyles.backdrop} onPress={onClose} />
+        <View style={modalStyles.sheet}>
+          {/* Drag handle */}
+          <View style={modalStyles.dragHandle} />
+
+          {/* Title row */}
+          <View style={modalStyles.titleRow}>
+            <Text style={modalStyles.title}>Needs Your Attention</Text>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={modalStyles.closeBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Entries list */}
+          <ScrollView
+            style={modalStyles.list}
+            contentContainerStyle={modalStyles.listContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {entries.map((entry, idx) => {
+              const iconName = getAttentionIcon(entry.text, entry.source, entry.taskMeta);
+              const isDelegated = delegated.has(entry.text);
+              return (
+                <View key={idx}>
+                  <View style={[modalStyles.entryRow, isDelegated && modalStyles.entryRowDelegated]}>
+                    <View style={modalStyles.entryIconCircle}>
+                      <Feather name={iconName} size={16} color={Colors.primaryDeepRose} />
+                    </View>
+                    <Text style={modalStyles.entryText} numberOfLines={3}>
+                      {entry.text}
+                    </Text>
+                    {isDelegated ? (
+                      <View style={modalStyles.delegatedBadge}>
+                        <Text style={modalStyles.delegatedBadgeText}>Delegated ✓</Text>
+                      </View>
+                    ) : entry.source === 'message' ? (
+                      <TouchableOpacity
+                        style={modalStyles.actionBtnBlush}
+                        activeOpacity={0.75}
+                        onPress={() => onDraftEmail(entry)}
+                      >
+                        <Text style={modalStyles.actionBtnBlushText}>Draft Email →</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={modalStyles.actionBtnLavender}
+                        activeOpacity={0.75}
+                        onPress={() => onDelegate(entry.text)}
+                      >
+                        <Text style={modalStyles.actionBtnLavenderText}>Delegate →</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {idx < entries.length - 1 && <View style={modalStyles.divider} />}
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          {/* Done button */}
+          <TouchableOpacity style={modalStyles.doneBtn} activeOpacity={0.8} onPress={onClose}>
+            <Text style={modalStyles.doneBtnText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -132,12 +236,6 @@ const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 function formatWeekLabel(createdAt: string): string {
   const d = new Date(createdAt);
   return `Week of ${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
-}
-
-function getAttentionIcon(item: string, source: 'message' | 'taskMeta', taskMeta?: TaskMeta): FeatherIconName {
-  if (source === 'message') return 'mail';
-  if (taskMeta?.isPartnerTask) return 'user';
-  return 'check-circle';
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -148,6 +246,8 @@ export default function RhythmScreen() {
   const [dump, setDump] = useState<OrganizedDump | null>(null);
   const [history, setHistory] = useState<OrganizedDump[]>([]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [delegated, setDelegated] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -183,15 +283,32 @@ export default function RhythmScreen() {
     console.log('[Rhythm] "See calendar" pressed');
   }, []);
 
-  const handleReview = useCallback((dumpId: string) => {
-    console.log('[Rhythm] "Review" attention items pressed — dumpId:', dumpId);
-    router.push({ pathname: '/category-detail', params: { dumpId } });
-  }, [router]);
+  const handleReview = useCallback(() => {
+    console.log('[Rhythm] "Review" pressed — opening modal');
+    setReviewModalVisible(true);
+  }, []);
 
   const handleCategoryRowPress = useCallback((cat: CategoryKey, dumpId: string) => {
     console.log('[Rhythm] category row pressed —', cat, '| dumpId:', dumpId);
     router.push({ pathname: '/category-detail', params: { dumpId } });
   }, [router]);
+
+  const handleDraftEmail = useCallback((entry: AttentionEntry) => {
+    console.log('[Rhythm] Draft Email pressed from Review modal —', entry.text);
+    router.push({
+      pathname: '/email-draft',
+      params: {
+        taskText: entry.text,
+        childName: entry.taskMeta?.childName ?? '',
+        category: 'messages',
+      },
+    });
+  }, [router]);
+
+  const handleDelegate = useCallback((key: string) => {
+    console.log('[Rhythm] Delegate pressed —', key);
+    setDelegated((prev) => new Set([...prev, key]));
+  }, []);
 
   // ── Displayed dump (history-aware) ──
   const displayDump = history.length > 0 ? (history[historyIndex] ?? dump) : dump;
@@ -245,7 +362,6 @@ export default function RhythmScreen() {
   const groupedTracking = groupTrackingByDate(trackingItems);
 
   // Needs your attention — track source for icon logic
-  type AttentionEntry = { text: string; source: 'message' | 'taskMeta'; taskMeta?: TaskMeta };
   const attentionEntries: AttentionEntry[] = [];
   if (displayDump.taskMeta) {
     displayDump.taskMeta.forEach((meta) => {
@@ -391,7 +507,7 @@ export default function RhythmScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Needs your attention</Text>
-            <TouchableOpacity onPress={() => handleReview(displayDump.id)} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => handleReview()} activeOpacity={0.7}>
               <Text style={styles.linkText}>Review</Text>
             </TouchableOpacity>
           </View>
@@ -432,6 +548,16 @@ export default function RhythmScreen() {
           <Sparkles size={16} color={Colors.primaryBlush} />
         </View>
       </View>
+
+      {/* ── Review Modal ── */}
+      <ReviewModal
+        visible={reviewModalVisible}
+        entries={attentionEntries}
+        delegated={delegated}
+        onDelegate={handleDelegate}
+        onDraftEmail={handleDraftEmail}
+        onClose={() => setReviewModalVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -733,5 +859,138 @@ const styles = StyleSheet.create({
     top: 14,
     right: 14,
     opacity: 0.6,
+  },
+});
+
+// ─── Modal Styles ─────────────────────────────────────────────────────────────
+
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '75%',
+    paddingBottom: 32,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  title: {
+    fontSize: 18,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+  },
+  closeBtn: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+  },
+  list: {
+    flexShrink: 1,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  entryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  entryRowDelegated: {
+    opacity: 0.5,
+  },
+  entryIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primaryBlush + '44',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  entryText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMain,
+    lineHeight: 20,
+  },
+  delegatedBadge: {
+    backgroundColor: '#D4EDDA',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  delegatedBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+    color: '#2E7D32',
+  },
+  actionBtnBlush: {
+    backgroundColor: Colors.primaryBlush + '33',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.primaryBlush,
+  },
+  actionBtnBlushText: {
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.primaryDeepRose,
+  },
+  actionBtnLavender: {
+    backgroundColor: Colors.lavender + '33',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.lavender,
+  },
+  actionBtnLavenderText: {
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+    color: '#7B5EA7',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginLeft: 50,
+  },
+  doneBtn: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    backgroundColor: Colors.primaryBlush,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  doneBtnText: {
+    fontSize: 16,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.card,
   },
 });
