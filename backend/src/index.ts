@@ -7,6 +7,7 @@ import * as transcribeRoutes from './routes/transcribe.js';
 import * as emailDraftRoutes from './routes/email-draft.js';
 import * as rhythmRecapRoutes from './routes/rhythm-recap.js';
 import * as organizeImageRoutes from './routes/organize-image.js';
+import * as migrateRoutes from './routes/migrate.js';
 
 // Merge app and auth schemas
 const schema = { ...appSchema, ...authSchema };
@@ -35,6 +36,7 @@ transcribeRoutes.register(app, app.fastify);
 emailDraftRoutes.register(app, app.fastify);
 rhythmRecapRoutes.register(app, app.fastify);
 organizeImageRoutes.register(app, app.fastify);
+migrateRoutes.register(app, app.fastify);
 
 console.log('[STARTUP] OPENROUTER_API_KEY present:', !!process.env.OPENROUTER_API_KEY, '| length:', process.env.OPENROUTER_API_KEY?.length ?? 0);
 await app.run();
