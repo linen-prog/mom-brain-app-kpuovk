@@ -18,6 +18,8 @@ export const app = await createApplication(schema);
 export type App = typeof app;
 
 // Enable authentication with email/password and OAuth providers
+// Apple OAuth credentials are configured via environment variables:
+// APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY
 app.withAuth();
 
 // Register routes - add your route modules here
