@@ -1,217 +1,142 @@
-import { KidProfile, TaskMeta, TrackingItem, RhythmInsight } from '@/utils/storage';
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { BEARER_TOKEN_KEY } from "@/lib/auth";
 
-export const BACKEND_URL = 'https://b5y3w3kp3t8bp2qnpaqeu7mhk95gwhc2.app.specular.dev';
+export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || "";
 
-export interface OrganizeResponse {
-  doToday: string[];
-  thisWeek: string[];
-  kids: string[];
-  home: string[];
-  errands: string[];
-  meals: string[];
-  messages: string[];
-  holdingForLater: string[];
-  work?: string[];
-  momCheckIn: string;
-  taskMeta?: TaskMeta[];
-  trackingItems?: TrackingItem[];
-  rhythmInsights?: RhythmInsight;
-}
+export const isBackendConfigured = (): boolean => {
+  return !!BACKEND_URL && BACKEND_URL.length > 0;
+};
 
-export type CategoryKey = 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work';
-
-export type OrganizeErrorKind = 'rate_limited' | 'server_error' | 'network';
-
-export class OrganizeError extends Error {
-  kind: OrganizeErrorKind;
-  userMessage: string;
-  constructor(kind: OrganizeErrorKind, userMessage: string) {
-    super(userMessage);
-    this.kind = kind;
-    this.userMessage = userMessage;
-  }
-}
-
-export async function organizeText(
-  text: string,
-  options?: { kids?: KidProfile[]; partnerName?: string }
-): Promise<OrganizeResponse> {
-  console.log('[API] POST /api/organize — sending brain dump, length:', text.length, '| kids:', options?.kids?.length ?? 0, '| partner:', options?.partnerName ?? 'none');
-
-  const body: Record<string, unknown> = { text };
-  if (options?.kids && options.kids.length > 0) body.kids = options.kids;
-  if (options?.partnerName) body.partnerName = options.partnerName;
-
-  let response: Response;
+export const getBearerToken = async (): Promise<string | null> => {
   try {
-    response = await fetch(`${BACKEND_URL}/api/organize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (fetchErr) {
-    console.error('[API] /api/organize network failure:', fetchErr);
-    throw new OrganizeError('network', "I couldn't reach the cloud. Check your connection and try again.");
+    if (Platform.OS === "web") {
+      return localStorage.getItem(BEARER_TOKEN_KEY);
+    } else {
+      return await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+    }
+  } catch (error) {
+    console.error("[API] Error retrieving bearer token:", error);
+    return null;
   }
+};
+
+export const apiCall = async <T = any>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> => {
+  if (!isBackendConfigured()) {
+    throw new Error("Backend URL not configured. Please rebuild the app.");
+  }
+
+  const url = `${BACKEND_URL}${endpoint}`;
+
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  };
+
+  const token = await getBearerToken();
+  if (token) {
+    fetchOptions.headers = {
+      ...fetchOptions.headers,
+      Authorization: `Bearer ${token}`,
+    };
+  }
+
+  const response = await fetch(url, fetchOptions);
 
   if (!response.ok) {
-    let errBody: { error?: string; message?: string } = {};
-    try {
-      errBody = await response.json();
-    } catch {
-      const raw = await response.text().catch(() => '');
-      console.error('[API] /api/organize error (non-JSON):', response.status, raw);
-    }
-    console.error('[API] /api/organize error:', response.status, errBody);
-    if (errBody.error === 'rate_limited') {
-      throw new OrganizeError('rate_limited', errBody.message ?? "Mom Brain needs a minute to catch up. Try again shortly.");
-    }
-    throw new OrganizeError('server_error', errBody.message ?? "Something got tangled. Try again.");
+    const text = await response.text();
+    throw new Error(`API error: ${response.status} - ${text}`);
   }
 
-  const data = await response.json();
-  console.log('[API] /api/organize success — categories received:', Object.keys(data));
+  return response.json();
+};
 
-  if (!Array.isArray(data?.doToday)) {
-    console.error('[API] /api/organize unexpected shape:', data);
-    throw new OrganizeError('server_error', "Something got tangled. Try again.");
+export const apiGet = async <T = any>(endpoint: string): Promise<T> => {
+  return apiCall<T>(endpoint, { method: "GET" });
+};
+
+export const apiPost = async <T = any>(endpoint: string, data: any): Promise<T> => {
+  return apiCall<T>(endpoint, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+export const apiPut = async <T = any>(endpoint: string, data: any): Promise<T> => {
+  return apiCall<T>(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+};
+
+export const apiPatch = async <T = any>(endpoint: string, data: any): Promise<T> => {
+  return apiCall<T>(endpoint, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+};
+
+export const apiDelete = async <T = any>(endpoint: string, data: any = {}): Promise<T> => {
+  return apiCall<T>(endpoint, {
+    method: "DELETE",
+    body: JSON.stringify(data),
+  });
+};
+
+export const authenticatedApiCall = async <T = any>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> => {
+  const token = await getBearerToken();
+
+  if (!token) {
+    throw new Error("Authentication token not found. Please sign in.");
   }
 
-  return data as OrganizeResponse;
-}
+  return apiCall<T>(endpoint, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+};
 
-// ─── Draft email ──────────────────────────────────────────────────────────────
+export const authenticatedGet = async <T = any>(endpoint: string): Promise<T> => {
+  return authenticatedApiCall<T>(endpoint, { method: "GET" });
+};
 
-export interface DraftEmailParams {
-  taskText: string;
-  context: 'teacher' | 'pediatrician' | 'activity' | 'other_parent' | 'work' | 'admin';
-  recipientName?: string;
-  childName?: string;
-  additionalNotes?: string;
-}
+export const authenticatedPost = async <T = any>(endpoint: string, data: any): Promise<T> => {
+  return authenticatedApiCall<T>(endpoint, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
 
-export interface DraftEmailResponse {
-  subject: string;
-  body: string;
-  recipientName?: string;
-}
+export const authenticatedPut = async <T = any>(endpoint: string, data: any): Promise<T> => {
+  return authenticatedApiCall<T>(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+};
 
-export async function draftEmail(params: DraftEmailParams): Promise<DraftEmailResponse> {
-  console.log('[API] POST /api/draft-email — context:', params.context, '| task:', params.taskText.slice(0, 60));
+export const authenticatedPatch = async <T = any>(endpoint: string, data: any): Promise<T> => {
+  return authenticatedApiCall<T>(endpoint, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+};
 
-  let response: Response;
-  try {
-    response = await fetch(`${BACKEND_URL}/api/draft-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
-  } catch (fetchErr) {
-    console.error('[API] /api/draft-email network failure:', fetchErr);
-    throw new Error("I couldn't reach the cloud. Check your connection and try again.");
-  }
-
-  if (!response.ok) {
-    const raw = await response.text().catch(() => '');
-    console.error('[API] /api/draft-email error:', response.status, raw);
-    throw new Error("Couldn't draft the email. Try again in a moment.");
-  }
-
-  const data = await response.json();
-  console.log('[API] /api/draft-email success — subject:', data.subject);
-  return data as DraftEmailResponse;
-}
-
-// ─── Rhythm recap ─────────────────────────────────────────────────────────────
-
-export interface RhythmRecapParams {
-  completedTasks: string[];
-  pendingTasks: string[];
-  trackingItems: TrackingItem[];
-}
-
-export interface RhythmRecapResponse {
-  doneThisWeek: string[];
-  rollingOver: string[];
-  comingUp: string[];
-  momMessage: string;
-  weekLabel: string;
-}
-
-// ─── Organize images ──────────────────────────────────────────────────────────
-
-export interface OrganizeImageResponse extends OrganizeResponse {
-  noActionableContent?: boolean;
-  message?: string;
-  source?: 'screenshot';
-}
-
-export async function organizeImages(
-  images: { base64: string; mimeType: string }[],
-  options?: { kids?: KidProfile[]; partnerName?: string }
-): Promise<OrganizeImageResponse> {
-  console.log('[API] POST /api/organize-image — images:', images.length, '| kids:', options?.kids?.length ?? 0, '| partner:', options?.partnerName ?? 'none');
-
-  const body: Record<string, unknown> = { images };
-  if (options?.kids && options.kids.length > 0) body.kids = options.kids;
-  if (options?.partnerName) body.partnerName = options.partnerName;
-
-  let response: Response;
-  try {
-    response = await fetch(`${BACKEND_URL}/api/organize-image`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (fetchErr) {
-    console.error('[API] /api/organize-image network failure:', fetchErr);
-    throw new OrganizeError('network', "I couldn't reach the cloud. Check your connection and try again.");
-  }
-
-  if (!response.ok) {
-    let errBody: { error?: string; message?: string } = {};
-    try {
-      errBody = await response.json();
-    } catch {
-      const raw = await response.text().catch(() => '');
-      console.error('[API] /api/organize-image error (non-JSON):', response.status, raw);
-    }
-    console.error('[API] /api/organize-image error:', response.status, errBody);
-    if (errBody.error === 'rate_limited') {
-      throw new OrganizeError('rate_limited', errBody.message ?? "Mom Brain needs a minute to catch up. Try again shortly.");
-    }
-    throw new OrganizeError('server_error', errBody.message ?? "Something got tangled. Try again.");
-  }
-
-  const data = await response.json();
-  console.log('[API] /api/organize-image success — noActionableContent:', data.noActionableContent ?? false, '| categories:', Object.keys(data));
-  return data as OrganizeImageResponse;
-}
-
-// ─── Rhythm recap ─────────────────────────────────────────────────────────────
-
-export async function getRhythmRecap(params: RhythmRecapParams): Promise<RhythmRecapResponse> {
-  console.log('[API] POST /api/rhythm-recap — completed:', params.completedTasks.length, '| pending:', params.pendingTasks.length, '| tracking:', params.trackingItems.length);
-
-  let response: Response;
-  try {
-    response = await fetch(`${BACKEND_URL}/api/rhythm-recap`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
-  } catch (fetchErr) {
-    console.error('[API] /api/rhythm-recap network failure:', fetchErr);
-    throw new Error("I couldn't reach the cloud. Check your connection and try again.");
-  }
-
-  if (!response.ok) {
-    const raw = await response.text().catch(() => '');
-    console.error('[API] /api/rhythm-recap error:', response.status, raw);
-    throw new Error("Couldn't generate your recap. Try again in a moment.");
-  }
-
-  const data = await response.json();
-  console.log('[API] /api/rhythm-recap success — weekLabel:', data.weekLabel);
-  return data as RhythmRecapResponse;
-}
+export const authenticatedDelete = async <T = any>(endpoint: string, data: any = {}): Promise<T> => {
+  return authenticatedApiCall<T>(endpoint, {
+    method: "DELETE",
+    body: JSON.stringify(data),
+  });
+};

@@ -15,6 +15,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AuthProvider } from "@/contexts/AuthContext";
 import {
   useFonts,
   Nunito_400Regular,
@@ -30,7 +31,7 @@ const DevErrorBoundary = __DEV__
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  initialRouteName: "index",
 };
 
 export default function RootLayout() {
@@ -74,24 +75,30 @@ export default function RootLayout() {
 
   return (
     <DevErrorBoundary>
-      <StatusBar style="dark" animated />
-      <ThemeProvider
-        value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
-      >
-        <SafeAreaProvider>
-          <WidgetProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <Stack>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="email-draft" options={{ headerShown: false }} />
-                <Stack.Screen name="screenshot-review" options={{ title: 'Review Extracted Tasks', headerShown: true }} />
-                <Stack.Screen name="category-detail" options={{ headerShown: false }} />
-              </Stack>
-              <SystemBars style="dark" />
-            </GestureHandlerRootView>
-          </WidgetProvider>
-        </SafeAreaProvider>
-      </ThemeProvider>
+      <AuthProvider>
+        <StatusBar style="dark" animated />
+        <ThemeProvider
+          value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
+        >
+          <SafeAreaProvider>
+            <WidgetProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <Stack>
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth-screen" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="email-draft" options={{ headerShown: false }} />
+                  <Stack.Screen name="screenshot-review" options={{ title: 'Review Extracted Tasks', headerShown: true }} />
+                  <Stack.Screen name="category-detail" options={{ headerShown: false }} />
+                </Stack>
+                <SystemBars style="dark" />
+              </GestureHandlerRootView>
+            </WidgetProvider>
+          </SafeAreaProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </DevErrorBoundary>
   );
 }
