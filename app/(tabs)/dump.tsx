@@ -706,7 +706,7 @@ export default function DumpScreen() {
                 <Text style={styles.voiceSubLabel}>Tap to voice your thoughts</Text>
               </View>
             </View>
-            {micButtonNode}
+            <View style={styles.rowButtonSlot}>{micButtonNode}</View>
           </View>
 
           <View style={styles.divider} />
@@ -720,16 +720,18 @@ export default function DumpScreen() {
                 <Text style={styles.voiceSubLabel}>Add a school note, list, text, or reminder</Text>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={handlePickImages}
-              disabled={selectedImages.length >= 3}
-              activeOpacity={0.85}
-              accessibilityLabel="Pick screenshot"
-            >
-              <View style={[styles.micButton, selectedImages.length >= 3 && styles.micButtonDisabled]}>
-                <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={28} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
+            <View style={styles.rowButtonSlot}>
+              <TouchableOpacity
+                onPress={handlePickImages}
+                disabled={selectedImages.length >= 3}
+                activeOpacity={0.85}
+                accessibilityLabel="Pick screenshot"
+              >
+                <View style={[styles.micButton, selectedImages.length >= 3 && styles.micButtonDisabled]}>
+                  <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={28} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.divider} />
@@ -743,19 +745,21 @@ export default function DumpScreen() {
                 <Text style={styles.voiceSubLabel}>Quickly type what's on your mind</Text>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => {
-                const next = !typedExpanded;
-                console.log('[Dump] "Type it out" button pressed — typedExpanded:', next);
-                setTypedExpanded(next);
-              }}
-              activeOpacity={0.85}
-              accessibilityLabel="Toggle typed input"
-            >
-              <View style={[styles.micButton, typedExpanded && styles.micButtonActive]}>
-                <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={28} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
+            <View style={styles.rowButtonSlot}>
+              <TouchableOpacity
+                onPress={() => {
+                  const next = !typedExpanded;
+                  console.log('[Dump] "Type it out" button pressed — typedExpanded:', next);
+                  setTypedExpanded(next);
+                }}
+                activeOpacity={0.85}
+                accessibilityLabel="Toggle typed input"
+              >
+                <View style={[styles.micButton, typedExpanded && styles.micButtonActive]}>
+                  <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={28} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Expandable typed input */}
@@ -1257,6 +1261,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  rowButtonSlot: {
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rowPill: {
     backgroundColor: Colors.primaryBlush + '18',
