@@ -18,9 +18,15 @@ export const app = await createApplication(schema);
 export type App = typeof app;
 
 // Enable authentication with email/password and OAuth providers
-// Apple OAuth credentials are configured via environment variables:
-// APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY
-app.withAuth();
+// Google OAuth and Apple OAuth credentials are configured via environment variables
+app.withAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '44493112497-oda273qgp4keejh78t2bqldg541qfjsm.apps.googleusercontent.com',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    },
+  },
+});
 
 // Register routes - add your route modules here
 // IMPORTANT: Always use registration functions to avoid circular dependency issues
