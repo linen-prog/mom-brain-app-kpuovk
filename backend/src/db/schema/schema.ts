@@ -48,7 +48,7 @@ export const dumps = pgTable('dumps', {
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: text('user_id').notNull().references(() => userProfile.userId, { onDelete: 'cascade' }),
-  dumpId: uuid('dump_id').references(() => dumps.id, { onDelete: 'cascade' }),
+  dumpId: uuid('dump_id').notNull().references(() => dumps.id, { onDelete: 'cascade' }),
   taskText: text('task_text').notNull(),
   category: taskCategoryEnum('category').notNull().default('other'),
   childName: text('child_name'),
