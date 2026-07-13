@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import Constants from "expo-constants";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
+import { runMigration } from "@/utils/migration";
 
 interface User {
   id: string;
@@ -101,7 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // the opaque session ID, and the api-service's JWKS verifier rejects it.
       const session = await authClient.getSession();
       if (session?.data?.user) {
-        setUser(session.data.user as User);
+        const authedUser = session.data.user as User;
+        setUser(authedUser);
+        // Fire migration in background — does not block loading state
+        runMigration(authedUser.id);
       } else {
         setUser(null);
         await clearAuthTokens();
