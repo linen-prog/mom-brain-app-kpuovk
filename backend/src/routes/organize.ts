@@ -413,10 +413,10 @@ export function register(app: App, fastify: FastifyInstance) {
         const { text, kids, partnerName } = request.body;
         app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'organize_handler_start');
 
-        if (!text || text.trim().length === 0) {
+        if (!text || typeof text !== 'string' || text.trim().length === 0) {
           app.logger.warn({}, 'organize_empty_text');
           reply.code(400);
-          return { error: 'text is required' };
+          return { error: 'text is required and must be non-empty' };
         }
 
         app.logger.info({}, 'calling_organize_ai');
