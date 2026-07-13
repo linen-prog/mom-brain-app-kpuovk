@@ -67,7 +67,8 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://b5y3w3kp3t8bp2qnpaqeu7mhk95gwhc2.app.specular.dev"
+      "backendUrl": "https://b5y3w3kp3t8bp2qnpaqeu7mhk95gwhc2.app.specular.dev",
+      "googleIosClientId": "44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr.apps.googleusercontent.com"
     }
   }
 }

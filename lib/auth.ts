@@ -24,6 +24,7 @@ export const authClient = createAuthClient({
       scheme: "mombrain",
       storagePrefix: "mombrain",
       storage,
+      iosClientId: "44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr.apps.googleusercontent.com",
     }),
   ],
   fetchOptions: {

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
+import Constants from "expo-constants";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
 
 interface User {
@@ -150,7 +151,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithGoogle = () => signInWithSocial("google");
+  const signInWithGoogle = async () => {
+    const iosClientId = Constants.expoConfig?.extra?.googleIosClientId as string | undefined;
+    console.log("[Auth] signInWithGoogle pressed, platform:", Platform.OS, "iosClientId:", iosClientId);
+    await signInWithSocial("google");
+  };
 
   const signInWithApple = async () => {
     if (Platform.OS === "ios") {
