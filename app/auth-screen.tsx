@@ -22,7 +22,7 @@ function resolveImageSource(
   return source as ImageSourcePropType;
 }
 
-const logoImage = require("@/assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png");
+const logoImage = require("@/assets/images/b70e1fd6-d418-44bc-854c-3248ed1c2ec7.jpeg");
 
 export default function AuthScreen() {
   const { user, loading, signInWithApple, signInWithGoogle } = useAuth();

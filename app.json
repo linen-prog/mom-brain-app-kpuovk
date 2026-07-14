@@ -4,10 +4,10 @@
     "slug": "mom-brain",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
+    "icon": "./assets/images/b70e1fd6-d418-44bc-854c-3248ed1c2ec7.jpeg",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
+      "image": "./assets/images/b70e1fd6-d418-44bc-854c-3248ed1c2ec7.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
@@ -22,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/ChatGPT Image Jul 1, 2026, 02_52_50 PM.png",
+        "foregroundImage": "./assets/images/b70e1fd6-d418-44bc-854c-3248ed1c2ec7.jpeg",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.hersomatic.mombrain",
