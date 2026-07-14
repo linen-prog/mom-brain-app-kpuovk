@@ -17,6 +17,7 @@ export const userProfile = pgTable('user_profile', {
   voiceDumpsUsedThisPeriod: integer('voice_dumps_used_this_period').notNull().default(0),
   periodResetAt: timestamp('period_reset_at', { withTimezone: true }),
   historyRetentionDays: integer('history_retention_days').notNull().default(30),
+  hasMigratedLocalData: boolean('has_migrated_local_data').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "user_profile" ADD COLUMN "has_migrated_local_data" boolean DEFAULT false NOT NULL;

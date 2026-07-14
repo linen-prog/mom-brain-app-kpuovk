@@ -168,14 +168,16 @@ export function register(app: App, fastify: FastifyInstance) {
       app.logger.info({ userId, dumpsCount: dumps.length, kidsCount: kids.length }, 'migrate_local_data_start');
 
       try {
-        // Idempotency guard: check if user already has dumps
-        const existingDumps = await app.db
+        // Idempotency guard: check user_profile.has_migrated_local_data
+        const userProfileRow = await app.db
           .select()
-          .from(schema.dumps)
-          .where(eq(schema.dumps.userId, userId))
+          .from(schema.userProfile)
+          .where(eq(schema.userProfile.userId, userId))
           .limit(1);
 
-        if (existingDumps && Array.isArray(existingDumps) && existingDumps.length > 0) {
+        const userProf = Array.isArray(userProfileRow) && userProfileRow.length > 0 ? userProfileRow[0] : null;
+
+        if (userProf && userProf.hasMigratedLocalData) {
           app.logger.info({ userId }, 'migrate_already_migrated');
           return reply.status(200).send({
             migrated: false,
@@ -266,7 +268,7 @@ export function register(app: App, fastify: FastifyInstance) {
             app.logger.info({ userId, kidsInserted }, 'migrate_kids_inserted');
           }
 
-          // Upsert user_profile
+          // Upsert user_profile with has_migrated_local_data = true
           await tx
             .insert(schema.userProfile)
             .values({
@@ -277,6 +279,7 @@ export function register(app: App, fastify: FastifyInstance) {
               onboardingDone,
               voiceDumpsUsedThisPeriod: 0,
               historyRetentionDays: 30,
+              hasMigratedLocalData: true,
               createdAt: new Date(),
               updatedAt: new Date(),
             })
@@ -285,6 +288,7 @@ export function register(app: App, fastify: FastifyInstance) {
               set: {
                 partnerName,
                 onboardingDone,
+                hasMigratedLocalData: true,
                 updatedAt: new Date(),
               },
             });
