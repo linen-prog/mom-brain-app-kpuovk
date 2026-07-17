@@ -262,7 +262,8 @@ export default function RhythmScreen() {
 
   const handleGoDump = useCallback(() => {
     console.log('[Rhythm] "Go to Dump" pressed from empty state');
-  }, []);
+    router.push('/(tabs)/dump');
+  }, [router]);
 
   const handlePrevWeek = useCallback(() => {
     console.log('[Rhythm] prev week chevron pressed — historyIndex:', historyIndex + 1);
