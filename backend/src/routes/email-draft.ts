@@ -71,11 +71,30 @@ export function register(app: App, fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Body: EmailDraftRequestBody }>, reply: FastifyReply) => {
       const { taskText, context, recipientName, childName, additionalNotes } = request.body;
 
-      if (!taskText || taskText.trim().length === 0 || !context) {
-        app.logger.warn({ taskText, context }, 'Missing required fields');
+      // Validate required fields
+      if (!taskText || typeof taskText !== 'string' || taskText.trim().length === 0) {
+        app.logger.warn({ taskText }, 'Missing or invalid taskText');
         reply.code(400);
         return {
-          error: 'taskText and context are required',
+          error: 'taskText is required and must be non-empty',
+        };
+      }
+
+      if (!context || typeof context !== 'string') {
+        app.logger.warn({ context }, 'Missing or invalid context');
+        reply.code(400);
+        return {
+          error: 'context is required',
+        };
+      }
+
+      // Validate context enum
+      const validContexts = ['teacher', 'pediatrician', 'activity', 'other_parent', 'work', 'admin'];
+      if (!validContexts.includes(context)) {
+        app.logger.warn({ context }, 'Invalid context value');
+        reply.code(400);
+        return {
+          error: `context must be one of: ${validContexts.join(', ')}`,
         };
       }
 

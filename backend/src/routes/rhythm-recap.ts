@@ -12,7 +12,7 @@ interface RhythmRecapRequestBody {
   completedTasks: string[];
   pendingTasks: string[];
   trackingItems: TrackingItem[];
-  daysUntilSunday?: number;
+  daysUntilSunday: number;
 }
 
 interface RhythmRecapResponse {
@@ -86,6 +86,24 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: RhythmRecapRequestBody }>, reply: FastifyReply) => {
       const { completedTasks, pendingTasks, trackingItems, daysUntilSunday } = request.body;
+
+      // Validate required fields
+      if (completedTasks === undefined || !Array.isArray(completedTasks)) {
+        app.logger.warn({}, 'missing_completedTasks');
+        return reply.code(400).send({ error: 'completedTasks is required' });
+      }
+      if (pendingTasks === undefined || !Array.isArray(pendingTasks)) {
+        app.logger.warn({}, 'missing_pendingTasks');
+        return reply.code(400).send({ error: 'pendingTasks is required' });
+      }
+      if (trackingItems === undefined || !Array.isArray(trackingItems)) {
+        app.logger.warn({}, 'missing_trackingItems');
+        return reply.code(400).send({ error: 'trackingItems is required' });
+      }
+      if (daysUntilSunday === undefined || typeof daysUntilSunday !== 'number') {
+        app.logger.warn({}, 'missing_daysUntilSunday');
+        return reply.code(400).send({ error: 'daysUntilSunday is required' });
+      }
 
       app.logger.info(
         {

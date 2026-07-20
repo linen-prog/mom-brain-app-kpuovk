@@ -90,7 +90,16 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
+      let data;
+      try {
+        data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
+      } catch (err) {
+        app.logger.warn({ err }, 'Audio file too large');
+        return reply.status(413).send({
+          error: 'audio_too_large',
+          message: 'That recording is too long. Try a shorter one.',
+        });
+      }
 
       if (!data) {
         app.logger.warn('Audio file is required');

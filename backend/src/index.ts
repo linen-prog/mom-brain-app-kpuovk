@@ -1,17 +1,33 @@
 // recompile trigger — no functional change
 import { createApplication } from "@specific-dev/framework";
-import * as schema from './db/schema/schema.js';
+import * as appSchema from './db/schema/schema.js';
+import * as authSchema from './db/schema/auth-schema.js';
 import * as organizeRoutes from './routes/organize.js';
 import * as transcribeRoutes from './routes/transcribe.js';
 import * as emailDraftRoutes from './routes/email-draft.js';
 import * as rhythmRecapRoutes from './routes/rhythm-recap.js';
 import * as organizeImageRoutes from './routes/organize-image.js';
+import * as migrateRoutes from './routes/migrate.js';
+
+// Merge app and auth schemas
+const schema = { ...appSchema, ...authSchema };
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
 
 // Export App type for use in route files
 export type App = typeof app;
+
+// Enable authentication with email/password and OAuth providers
+// Google OAuth and Apple OAuth credentials are configured via environment variables
+app.withAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '44493112497-oda273qgp4keejh78t2bqldg541qfjsm.apps.googleusercontent.com',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    },
+  },
+});
 
 // Register routes - add your route modules here
 // IMPORTANT: Always use registration functions to avoid circular dependency issues
@@ -20,6 +36,7 @@ transcribeRoutes.register(app, app.fastify);
 emailDraftRoutes.register(app, app.fastify);
 rhythmRecapRoutes.register(app, app.fastify);
 organizeImageRoutes.register(app, app.fastify);
+migrateRoutes.register(app, app.fastify);
 
 console.log('[STARTUP] OPENROUTER_API_KEY present:', !!process.env.OPENROUTER_API_KEY, '| length:', process.env.OPENROUTER_API_KEY?.length ?? 0);
 await app.run();

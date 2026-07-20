@@ -929,4 +929,380 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("error");
     });
   });
+
+  describe("POST /api/migrate/local-data", () => {
+    let authToken: string;
+
+    test("Authenticate user before migration tests", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const { token } = await signUpTestUser();
+      authToken = token;
+      expect(authToken).toBeDefined();
+      expect(typeof authToken).toBe("string");
+    });
+
+    test("Migrate local data with valid minimal data", async () => {
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          kids: [],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("migrated");
+      expect(typeof data.migrated).toBe("boolean");
+      expect(data).toHaveProperty("dumpsInserted");
+      expect(data).toHaveProperty("tasksInserted");
+      expect(data).toHaveProperty("kidsInserted");
+    });
+
+    test("Migrate local data with dumps", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [
+            {
+              id: "dump-1",
+              originalText: "Buy milk, schedule dentist",
+              inputSource: "typed",
+              momCheckIn: "Feeling overwhelmed with tasks",
+              rhythmInsights: null,
+              isLatest: true,
+              createdAt: "2024-07-10T10:00:00Z",
+              taskMeta: [
+                {
+                  taskText: "Buy milk",
+                  category: "errands",
+                  childName: null,
+                  delegation: "me",
+                  isPartnerTask: false,
+                },
+              ],
+            },
+          ],
+          kids: [],
+          onboardingDone: true,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("migrated");
+      expect(data).toHaveProperty("dumpsInserted");
+      expect(typeof data.dumpsInserted).toBe("number");
+    });
+
+    test("Migrate local data with kids", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          kids: [
+            {
+              id: "kid-1",
+              name: "Emma",
+              age: 8,
+              grade: "3rd",
+              nicknames: ["Em", "Emmy"],
+            },
+            {
+              id: "kid-2",
+              name: "Lucas",
+              age: 6,
+              grade: "1st",
+              nicknames: null,
+            },
+          ],
+          onboardingDone: true,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("kidsInserted");
+      expect(typeof data.kidsInserted).toBe("number");
+    });
+
+    test("Migrate local data with complex dumps and multiple kids", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [
+            {
+              id: "dump-voice-1",
+              originalText: "Pick up kids, buy groceries, fix fence",
+              inputSource: "voice",
+              momCheckIn: "Need to prioritize",
+              rhythmInsights: {
+                topCategories: ["home", "kids", "errands"],
+                recurringThemes: ["family", "home maintenance"],
+              },
+              isLatest: false,
+              createdAt: "2024-07-08T14:30:00Z",
+              taskMeta: [
+                {
+                  taskText: "Pick up kids",
+                  category: "kids",
+                  childName: "Emma",
+                  delegation: "me",
+                  isPartnerTask: false,
+                },
+                {
+                  taskText: "Fix fence",
+                  category: "home",
+                  childName: null,
+                  delegation: "partner",
+                  isPartnerTask: true,
+                },
+              ],
+            },
+            {
+              id: "dump-screenshot-2",
+              originalText: "Screenshot notes",
+              inputSource: "screenshot",
+              momCheckIn: null,
+              rhythmInsights: null,
+              isLatest: true,
+              createdAt: "2024-07-10T09:00:00Z",
+              taskMeta: [],
+            },
+          ],
+          kids: [
+            {
+              id: "kid-emma",
+              name: "Emma",
+              age: 8,
+              grade: "3rd",
+              nicknames: ["Em"],
+            },
+          ],
+          partnerName: "John",
+          onboardingDone: true,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("migrated");
+      expect(data).toHaveProperty("dumpsInserted");
+      expect(data).toHaveProperty("tasksInserted");
+      expect(data).toHaveProperty("kidsInserted");
+    });
+
+    test("Migrate local data with multiple dumps", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [
+            {
+              id: "dump-a",
+              originalText: "Task A",
+              inputSource: "typed",
+              momCheckIn: null,
+              rhythmInsights: null,
+              isLatest: false,
+              createdAt: "2024-07-09T10:00:00Z",
+              taskMeta: [],
+            },
+            {
+              id: "dump-b",
+              originalText: "Task B",
+              inputSource: "voice",
+              momCheckIn: null,
+              rhythmInsights: null,
+              isLatest: false,
+              createdAt: "2024-07-09T11:00:00Z",
+              taskMeta: [],
+            },
+            {
+              id: "dump-c",
+              originalText: "Task C",
+              inputSource: "screenshot",
+              momCheckIn: "Feeling good",
+              rhythmInsights: null,
+              isLatest: true,
+              createdAt: "2024-07-10T10:00:00Z",
+              taskMeta: [],
+            },
+          ],
+          kids: [],
+          onboardingDone: true,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(typeof data.dumpsInserted).toBe("number");
+    });
+
+    test("Reject request without authentication", async () => {
+      const res = await api("/api/migrate/local-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          kids: [],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 401);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject request with missing dumps field", async () => {
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kids: [],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 400);
+    });
+
+    test("Reject request with missing kids field", async () => {
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 400);
+    });
+
+    test("Reject request with missing onboardingDone field", async () => {
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          kids: [],
+        }),
+      });
+      await expectStatus(res, 400);
+    });
+
+    test("Reject request with invalid inputSource in dump", async () => {
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [
+            {
+              id: "dump-1",
+              originalText: "Text",
+              inputSource: "invalid_source",
+              momCheckIn: null,
+              rhythmInsights: null,
+              isLatest: true,
+              createdAt: "2024-07-10T10:00:00Z",
+              taskMeta: [],
+            },
+          ],
+          kids: [],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 400);
+    });
+
+    test("Reject request with invalid delegation value in taskMeta", async () => {
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [
+            {
+              id: "dump-1",
+              originalText: "Text",
+              inputSource: "typed",
+              momCheckIn: null,
+              rhythmInsights: null,
+              isLatest: true,
+              createdAt: "2024-07-10T10:00:00Z",
+              taskMeta: [
+                {
+                  taskText: "Task",
+                  category: "home",
+                  childName: null,
+                  delegation: "invalid_delegation",
+                  isPartnerTask: false,
+                },
+              ],
+            },
+          ],
+          kids: [],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 400);
+    });
+
+    test("Migrate with onboardingDone true and partnerName", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          kids: [],
+          partnerName: "Sarah",
+          onboardingDone: true,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("migrated");
+    });
+
+    test("Migrate with nullable fields in kids", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await authenticatedApi("/api/migrate/local-data", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dumps: [],
+          kids: [
+            {
+              id: "kid-minimal",
+              name: "Child",
+              age: null,
+              grade: null,
+              nicknames: null,
+            },
+          ],
+          onboardingDone: false,
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("kidsInserted");
+    });
+  });
 });
