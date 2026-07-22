@@ -140,3 +140,96 @@ export const authenticatedDelete = async <T = any>(endpoint: string, data: any =
     body: JSON.stringify(data),
   });
 };
+
+export interface OrganizeResponse {
+  doToday: string[];
+  thisWeek: string[];
+  kids: string[];
+  home: string[];
+  errands: string[];
+  meals: string[];
+  messages: string[];
+  holdingForLater: string[];
+  work?: string[];
+  momCheckIn: string;
+  taskMeta?: Array<{
+    taskText: string;
+    category: 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work' | 'holdingForLater';
+    childName?: string | null;
+    delegation: 'me' | 'partner' | 'coparent' | 'kid';
+    isPartnerTask: boolean;
+  }>;
+  trackingItems?: Array<{
+    id: string;
+    text: string;
+    dueDate?: string | null;
+    category: 'tracking';
+  }>;
+  rhythmInsights?: {
+    topCategories: string[];
+    recurringThemes: string[];
+    momCheckIn: string;
+  };
+  noActionableContent?: boolean;
+}
+
+export class OrganizeError extends Error {
+  kind: 'rate_limited' | 'network' | 'server';
+  constructor(kind: 'rate_limited' | 'network' | 'server', message: string) {
+    super(message);
+    this.kind = kind;
+    this.name = 'OrganizeError';
+  }
+}
+
+export async function organizeText(
+  text: string,
+  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string }
+): Promise<OrganizeResponse> {
+  console.log('[organizeText] Calling POST /api/organize', { textLength: text.length, options });
+  try {
+    const result = await apiPost<OrganizeResponse>('/api/organize', {
+      text,
+      kids: options?.kids,
+      partnerName: options?.partnerName,
+    });
+    console.log('[organizeText] Success', { categories: Object.keys(result) });
+    return result;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[organizeText] Error', msg);
+    if (msg.includes('429') || msg.includes('rate')) {
+      throw new OrganizeError('rate_limited', msg);
+    }
+    if (msg.includes('network') || msg.includes('fetch') || msg.includes('Network')) {
+      throw new OrganizeError('network', msg);
+    }
+    throw new OrganizeError('server', msg);
+  }
+}
+
+export async function organizeImages(
+  images: Array<{ base64: string; mimeType: string }>,
+  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string }
+): Promise<OrganizeResponse> {
+  console.log('[organizeImages] Calling POST /api/organize-image', { imageCount: images.length, options });
+  try {
+    const result = await apiPost<OrganizeResponse>('/api/organize-image', {
+      images,
+      kids: options?.kids,
+      partnerName: options?.partnerName,
+    });
+    console.log('[organizeImages] Success', { categories: Object.keys(result) });
+    return result;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[organizeImages] Error', msg);
+    if (msg.includes('429') || msg.includes('rate')) {
+      throw new OrganizeError('rate_limited', msg);
+    }
+    if (msg.includes('network') || msg.includes('fetch') || msg.includes('Network')) {
+      throw new OrganizeError('network', msg);
+    }
+    throw new OrganizeError('server', msg);
+  }
+}
