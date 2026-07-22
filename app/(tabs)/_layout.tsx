@@ -46,7 +46,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="dump"
         options={{
-          title: 'Dump',
+          title: 'Brain',
           tabBarIcon: ({ color }) => <TabIcon icon="✦" color={color} />,
         }}
       />

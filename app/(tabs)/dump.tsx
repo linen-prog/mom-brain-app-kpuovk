@@ -618,7 +618,7 @@ export default function DumpScreen() {
   const micAccessibilityLabel =
     voiceState === 'transcribing' ? 'Transcribing' :
     voiceState === 'recording' ? 'Stop recording' :
-    'Start voice dump';
+    'Start voice recording';
 
   const voiceCardCopy = (() => {
     if (voiceState === 'recording') return 'Listening… say it messy.';
@@ -717,7 +717,7 @@ export default function DumpScreen() {
               <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={16} color={Colors.primaryDeepRose} />
               <View>
                 <Text style={styles.voiceLabel}>Screenshot it</Text>
-                <Text style={styles.voiceSubLabel}>Add a school note, list, text, or reminder</Text>
+                <Text style={styles.voiceSubLabel}>Snap a note, text, or reminder</Text>
               </View>
             </View>
             <View style={styles.rowButtonSlot}>
@@ -728,7 +728,7 @@ export default function DumpScreen() {
                 accessibilityLabel="Pick screenshot"
               >
                 <View style={[styles.micButton, selectedImages.length >= 3 && styles.micButtonDisabled]}>
-                  <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={28} color="#FFFFFF" />
+                  <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={24} color="#FFFFFF" />
                 </View>
               </TouchableOpacity>
             </View>
@@ -756,7 +756,7 @@ export default function DumpScreen() {
                 accessibilityLabel="Toggle typed input"
               >
                 <View style={[styles.micButton, typedExpanded && styles.micButtonActive]}>
-                  <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={28} color="#FFFFFF" />
+                  <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={24} color="#FFFFFF" />
                 </View>
               </TouchableOpacity>
             </View>
@@ -1263,7 +1263,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   rowButtonSlot: {
-    width: 72,
+    width: 64,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1277,6 +1277,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   voiceRowLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -1295,18 +1296,18 @@ const styles = StyleSheet.create({
   playTriangle: {
     width: 0,
     height: 0,
-    borderTopWidth: 11,
-    borderBottomWidth: 11,
-    borderLeftWidth: 18,
+    borderTopWidth: 9,
+    borderBottomWidth: 9,
+    borderLeftWidth: 15,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
     borderLeftColor: '#FFFFFF',
     marginLeft: 4,
   },
   micButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.primaryDeepRose,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1317,17 +1318,17 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   micRingOuter: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: Colors.primaryBlush + '22',
     alignItems: 'center',
     justifyContent: 'center',
   },
   micRingMid: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: Colors.primaryBlush + '33',
     alignItems: 'center',
     justifyContent: 'center',
