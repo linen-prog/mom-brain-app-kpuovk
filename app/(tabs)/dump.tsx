@@ -701,7 +701,7 @@ export default function DumpScreen() {
           <View style={styles.rowPill}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="mic.fill" android_material_icon_name="mic" size={16} color={Colors.primaryDeepRose} />
-              <View>
+              <View style={styles.rowTextBlock}>
                 <Text style={styles.voiceLabel}>Talk it out</Text>
                 <Text style={styles.voiceSubLabel}>Tap to voice your thoughts</Text>
               </View>
@@ -715,9 +715,9 @@ export default function DumpScreen() {
           <View style={styles.rowPill}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={16} color={Colors.primaryDeepRose} />
-              <View>
+              <View style={styles.rowTextBlock}>
                 <Text style={styles.voiceLabel}>Screenshot it</Text>
-                <Text style={styles.voiceSubLabel}>Snap a note, text, or reminder</Text>
+                <Text style={styles.voiceSubLabel}>Add a school note, list,{'\n'}text, or reminder</Text>
               </View>
             </View>
             <View style={styles.rowButtonSlot}>
@@ -740,7 +740,7 @@ export default function DumpScreen() {
           <View style={styles.rowPill}>
             <View style={styles.voiceRowLeft}>
               <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={16} color={Colors.primaryDeepRose} />
-              <View>
+              <View style={styles.rowTextBlock}>
                 <Text style={styles.voiceLabel}>Type it out</Text>
                 <Text style={styles.voiceSubLabel}>Quickly type what's on your mind</Text>
               </View>
@@ -1266,12 +1266,13 @@ const styles = StyleSheet.create({
     width: 64,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
   },
   rowPill: {
     backgroundColor: Colors.primaryBlush + '18',
     borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1281,6 +1282,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  rowTextBlock: {
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   voiceLabel: {
     fontSize: 15,
@@ -1292,6 +1297,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     color: Colors.textMuted,
     marginTop: 1,
+    flexWrap: 'wrap',
   },
   playTriangle: {
     width: 0,
