@@ -229,6 +229,171 @@ function ReviewModal({
   );
 }
 
+// ─── ComingUpModal ────────────────────────────────────────────────────────────
+
+function formatComingUpDate(isoDate: string): string {
+  const d = new Date(isoDate);
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+
+  const diffDays = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 6) return days[d.getDay()];
+  if (diffDays <= 13) return `Next ${days[d.getDay()]}`;
+
+  return `${shortMonths[d.getMonth()]} ${d.getDate()}`;
+}
+
+function ComingUpModal({
+  visible,
+  dump,
+  onClose,
+}: {
+  visible: boolean;
+  dump: OrganizedDump | null;
+  onClose: () => void;
+}) {
+  const now = new Date();
+  const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const trackingItems: TrackingItem[] = dump?.trackingItems ?? [];
+  const holdingItems: string[] = dump?.holdingForLater ?? [];
+
+  const thisWeekItems = trackingItems
+    .filter((item) => {
+      if (!item.dueDate) return false;
+      const d = new Date(item.dueDate);
+      return !isNaN(d.getTime()) && d >= now && d <= sevenDaysOut;
+    })
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+
+  const comingUpItems = trackingItems
+    .filter((item) => {
+      if (!item.dueDate) return false;
+      const d = new Date(item.dueDate);
+      return !isNaN(d.getTime()) && d > sevenDaysOut;
+    })
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+
+  const noDateTrackingItems = trackingItems.filter(
+    (item) => !item.dueDate || isNaN(new Date(item.dueDate).getTime())
+  );
+
+  const hasDatedContent = thisWeekItems.length > 0 || comingUpItems.length > 0;
+  const hasNoDateContent = noDateTrackingItems.length > 0 || holdingItems.length > 0;
+  const isEmpty = !hasDatedContent && !hasNoDateContent;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.overlay}>
+        <Pressable style={modalStyles.backdrop} onPress={onClose} />
+        <View style={[modalStyles.sheet, modalStyles.comingUpSheet]}>
+          {/* Drag handle */}
+          <View style={modalStyles.dragHandle} />
+
+          {/* Title row */}
+          <View style={modalStyles.titleRow}>
+            <Text style={modalStyles.title}>Coming Up</Text>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={modalStyles.closeBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Subtitle */}
+          <Text style={modalStyles.comingUpSubtitle}>Things on your radar</Text>
+
+          {/* Content */}
+          <ScrollView
+            style={modalStyles.list}
+            contentContainerStyle={modalStyles.comingUpListContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {isEmpty ? (
+              <View style={modalStyles.comingUpEmpty}>
+                <Text style={modalStyles.comingUpEmptyTitle}>Nothing scheduled yet.</Text>
+                <Text style={modalStyles.comingUpEmptyBody}>
+                  When you mention upcoming dates or things to remember in your brain dump, they'll appear here.
+                </Text>
+              </View>
+            ) : (
+              <>
+                {/* Section 1 — This Week */}
+                {thisWeekItems.length > 0 && (
+                  <View style={modalStyles.comingUpSection}>
+                    <Text style={modalStyles.comingUpSectionHeader}>This Week</Text>
+                    {thisWeekItems.map((item) => {
+                      const dateLabel = formatComingUpDate(item.dueDate!);
+                      return (
+                        <View key={item.id} style={modalStyles.comingUpItemRow}>
+                          <View style={modalStyles.comingUpDotSmall} />
+                          <Text style={modalStyles.comingUpItemText}>{item.text}</Text>
+                          <Text style={modalStyles.comingUpDateLabel}>{dateLabel}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Section 2 — Coming Up */}
+                {comingUpItems.length > 0 && (
+                  <View style={modalStyles.comingUpSection}>
+                    <Text style={modalStyles.comingUpSectionHeader}>Coming Up</Text>
+                    {comingUpItems.map((item) => {
+                      const dateLabel = formatComingUpDate(item.dueDate!);
+                      return (
+                        <View key={item.id} style={modalStyles.comingUpItemRow}>
+                          <View style={modalStyles.comingUpDotSmall} />
+                          <Text style={modalStyles.comingUpItemText}>{item.text}</Text>
+                          <Text style={modalStyles.comingUpDateLabel}>{dateLabel}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Section 3 — No date yet */}
+                {hasNoDateContent && (
+                  <View style={modalStyles.comingUpSection}>
+                    {hasDatedContent && <View style={modalStyles.comingUpSoftDivider} />}
+                    <Text style={modalStyles.comingUpSectionHeader}>No date yet</Text>
+                    {noDateTrackingItems.map((item) => (
+                      <View key={item.id} style={modalStyles.comingUpItemRow}>
+                        <View style={modalStyles.comingUpDotSmall} />
+                        <Text style={modalStyles.comingUpItemText}>{item.text}</Text>
+                      </View>
+                    ))}
+                    {holdingItems.map((str, idx) => (
+                      <View key={`holding-${idx}`} style={modalStyles.comingUpItemRow}>
+                        <View style={modalStyles.comingUpDotSmall} />
+                        <Text style={modalStyles.comingUpItemText}>{str}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+
+          {/* Done button */}
+          <TouchableOpacity style={modalStyles.doneBtn} activeOpacity={0.8} onPress={onClose}>
+            <Text style={modalStyles.doneBtnText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -247,6 +412,7 @@ export default function RhythmScreen() {
   const [history, setHistory] = useState<OrganizedDump[]>([]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [comingUpVisible, setComingUpVisible] = useState(false);
   const [delegated, setDelegated] = useState<Set<string>>(new Set());
 
   useFocusEffect(
@@ -281,7 +447,8 @@ export default function RhythmScreen() {
   }, [router]);
 
   const handleSeeCalendar = useCallback(() => {
-    console.log('[Rhythm] "See calendar" pressed');
+    console.log('[Rhythm] "See calendar" pressed — opening Coming Up modal');
+    setComingUpVisible(true);
   }, []);
 
   const handleReview = useCallback(() => {
@@ -558,6 +725,13 @@ export default function RhythmScreen() {
         onDelegate={handleDelegate}
         onDraftEmail={handleDraftEmail}
         onClose={() => setReviewModalVisible(false)}
+      />
+
+      {/* ── Coming Up Modal ── */}
+      <ComingUpModal
+        visible={comingUpVisible}
+        dump={displayDump}
+        onClose={() => setComingUpVisible(false)}
       />
     </ScrollView>
   );
@@ -993,5 +1167,84 @@ const modalStyles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Nunito_700Bold',
     color: Colors.card,
+  },
+  // ── ComingUpModal extras ──
+  comingUpSheet: {
+    maxHeight: '80%',
+  },
+  comingUpSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    paddingHorizontal: 20,
+    marginTop: -6,
+    marginBottom: 8,
+  },
+  comingUpListContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  comingUpSection: {
+    marginBottom: 8,
+  },
+  comingUpSectionHeader: {
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    marginTop: 8,
+  },
+  comingUpItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  comingUpDotSmall: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primaryDeepRose,
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  comingUpItemText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMain,
+    lineHeight: 20,
+  },
+  comingUpDateLabel: {
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.primaryDeepRose,
+  },
+  comingUpSoftDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  comingUpEmpty: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+  comingUpEmptyTitle: {
+    fontSize: 16,
+    fontFamily: 'Nunito_700Bold',
+    color: Colors.textMain,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  comingUpEmptyBody: {
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
