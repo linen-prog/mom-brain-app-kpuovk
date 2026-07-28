@@ -26,8 +26,17 @@ export function CategorySection({ title, items, accentColor, emptyHint, variant 
 
   function getChildName(itemText: string): string | null {
     if (!taskMeta) return null;
-    const meta = taskMeta.find((m) => m.taskText === itemText);
-    return meta?.childName ?? null;
+    // Direct match first
+    const direct = taskMeta.find((m) => m.taskText === itemText);
+    if (direct?.childName) return direct.childName;
+    // Try each meta entry: if itemText ends with " <childName>", strip it and match
+    for (const m of taskMeta) {
+      if (m.childName && itemText.endsWith(' ' + m.childName)) {
+        const stripped = itemText.slice(0, itemText.length - m.childName.length - 1);
+        if (stripped === m.taskText) return m.childName;
+      }
+    }
+    return null;
   }
 
   return (
@@ -53,11 +62,14 @@ export function CategorySection({ title, items, accentColor, emptyHint, variant 
         <View style={styles.itemsList}>
           {items.map((item, index) => {
             const childName = getChildName(item);
+            const displayText = childName && item.endsWith(' ' + childName)
+              ? item.slice(0, item.length - childName.length - 1)
+              : item;
             return (
               <View key={index} style={styles.itemRow}>
                 <View style={[styles.bullet, { backgroundColor: accentColor }]} />
                 <View style={styles.itemContent}>
-                  <Text style={itemTextStyle}>{item}</Text>
+                  <Text style={itemTextStyle}>{displayText}</Text>
                   {childName ? (
                     <View style={styles.childPill}>
                       <Text style={styles.childPillText}>{childName}</Text>
