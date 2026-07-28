@@ -208,6 +208,33 @@ export async function organizeText(
   }
 }
 
+export interface DraftEmailParams {
+  taskText: string;
+  context: 'teacher' | 'pediatrician' | 'activity' | 'other_parent' | 'work' | 'admin';
+  recipientName?: string;
+  childName?: string;
+  additionalNotes?: string;
+}
+
+export interface DraftEmailResponse {
+  subject: string;
+  body: string;
+  recipientName: string | null;
+}
+
+export async function draftEmail(params: DraftEmailParams): Promise<DraftEmailResponse> {
+  console.log('[draftEmail] Calling POST /api/email-draft', { context: params.context });
+  try {
+    const result = await apiPost<DraftEmailResponse>('/api/email-draft', params);
+    console.log('[draftEmail] Success');
+    return result;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[draftEmail] Error', msg);
+    throw new Error(msg);
+  }
+}
+
 export async function organizeImages(
   images: Array<{ base64: string; mimeType: string }>,
   options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string }
