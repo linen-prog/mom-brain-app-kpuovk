@@ -173,6 +173,8 @@ export interface OrganizeResponse {
   noActionableContent?: boolean;
 }
 
+export type OrganizeImageResponse = OrganizeResponse;
+
 export class OrganizeError extends Error {
   kind: 'rate_limited' | 'network' | 'server';
   constructor(kind: 'rate_limited' | 'network' | 'server', message: string) {
