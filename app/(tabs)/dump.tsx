@@ -742,7 +742,7 @@ export default function DumpScreen() {
               <IconSymbol ios_icon_name="keyboard" android_material_icon_name="keyboard" size={16} color={Colors.primaryDeepRose} />
               <View style={styles.rowTextBlock}>
                 <Text style={styles.voiceLabel}>Type it out</Text>
-                <Text style={styles.voiceSubLabel}>Quickly type what's on your mind</Text>
+                <Text style={styles.voiceSubLabel}>Quickly type what's{'\n'}on your mind</Text>
               </View>
             </View>
             <View style={styles.rowButtonSlot}>
