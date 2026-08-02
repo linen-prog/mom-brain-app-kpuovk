@@ -14,6 +14,7 @@ interface OrganizeRequestBody {
   text: string;
   kids?: Kid[];
   partnerName?: string;
+  stages?: string[];
 }
 
 export interface OrganizeResponse {
@@ -185,7 +186,7 @@ function isRateLimitError(err: unknown): boolean {
   return false;
 }
 
-export async function callOrganizeAI(text: string, kids?: Kid[], partnerName?: string): Promise<OrganizeResponse> {
+export async function callOrganizeAI(text: string, kids?: Kid[], partnerName?: string, stages?: string[]): Promise<OrganizeResponse> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     // Return mock response when API key is not set (for testing)
@@ -218,6 +219,9 @@ export async function callOrganizeAI(text: string, kids?: Kid[], partnerName?: s
         .join('\n')
     : '';
   const partnerInfo = partnerName ? `\n\nPartner name: ${partnerName}` : '';
+  const stagesContext = stages && stages.length > 0
+    ? `\n\nThis mom is in the ${stages.join(' and ')} stage. Tailor your categorization accordingly — e.g. a Newborn-stage mom's feeding schedules and sleep tracking belong in 'tracking items', a School-age mom's school events belong in 'thisWeek' or 'tracking'.`
+    : '';
 
   let lastError: unknown;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -236,7 +240,7 @@ export async function callOrganizeAI(text: string, kids?: Kid[], partnerName?: s
             { role: 'system', content: ORGANIZE_SYSTEM_PROMPT },
             {
               role: 'user',
-              content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}\n\nReturn ONLY valid JSON with all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work, momCheckIn, taskMeta, trackingItems, rhythmInsights.`,
+              content: `Please organize this brain dump into JSON format:\n\n${trimmedText}${kidsInfo}${partnerInfo}${stagesContext}\n\nReturn ONLY valid JSON with all fields: doToday, thisWeek, kids, home, errands, meals, messages, holdingForLater, work, momCheckIn, taskMeta, trackingItems, rhythmInsights.`,
             },
           ],
         }),
@@ -324,6 +328,7 @@ export function register(app: App, fastify: FastifyInstance) {
               },
             },
             partnerName: { type: 'string', description: 'Optional partner/spouse name' },
+            stages: { type: 'array', items: { type: 'string' }, description: 'Optional array of parenting stages (e.g., "Newborn", "School-age")' },
           },
         },
         response: {
@@ -410,8 +415,9 @@ export function register(app: App, fastify: FastifyInstance) {
       try {
         app.logger.info({ hasApiKey: !!process.env.OPENROUTER_API_KEY }, 'organize_handler_entry');
 
-        const { text, kids, partnerName } = request.body;
-        app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName }, 'organize_handler_start');
+        const { text, kids, partnerName, stages } = request.body;
+        console.log('[organize] stages:', stages);
+        app.logger.info({ textLength: text?.length, hasKids: !!kids, hasPartner: !!partnerName, hasStages: !!stages }, 'organize_handler_start');
 
         if (!text || typeof text !== 'string' || text.trim().length === 0) {
           app.logger.warn({}, 'organize_empty_text');
@@ -420,7 +426,7 @@ export function register(app: App, fastify: FastifyInstance) {
         }
 
         app.logger.info({}, 'calling_organize_ai');
-        const result = await callOrganizeAI(text, kids, partnerName);
+        const result = await callOrganizeAI(text, kids, partnerName, stages);
         app.logger.info({ resultKeys: Object.keys(result) }, 'organize_success');
         return result;
       } catch (error) {
