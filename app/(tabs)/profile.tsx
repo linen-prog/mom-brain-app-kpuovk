@@ -294,11 +294,16 @@ export default function ProfileScreen() {
 
   const handleSignOut = useCallback(() => {
     console.log('[Profile] Sign Out pressed');
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out of Mom Brain?', undefined, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: async () => { await signOut(); } },
+      { text: 'Sign Out', style: 'destructive', onPress: async () => {
+        console.log('[Profile] Sign out confirmed, signing out...');
+        await signOut();
+        console.log('[Profile] Sign out complete, navigating to auth screen');
+        router.replace('/auth-screen');
+      }},
     ]);
-  }, [signOut]);
+  }, [signOut, router]);
 
   const handleContactSupport = useCallback(() => {
     console.log('[Profile] Contact Support pressed');
