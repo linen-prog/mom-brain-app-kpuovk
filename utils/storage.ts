@@ -104,7 +104,7 @@ export async function addItemToCategory(
   item: string
 ): Promise<OrganizedDump | null> {
   try {
-    console.log('[Storage] addItemToCategory —', category, ':', item);
+    if (__DEV__) { console.log('[Storage] addItemToCategory —', category, ':', item); }
     const dump = await getLatestDump();
     if (!dump) return null;
     const updated: OrganizedDump = {
@@ -241,7 +241,7 @@ export async function getPartnerName(): Promise<string | null> {
 export async function savePartnerName(name: string): Promise<void> {
   try {
     await AsyncStorage.setItem(PARTNER_KEY, name);
-    console.log('[Storage] savePartnerName — saved:', name);
+    if (__DEV__) { console.log('[Storage] savePartnerName — saved:', name); }
   } catch (err) {
     console.error('[Storage] savePartnerName error:', err);
   }

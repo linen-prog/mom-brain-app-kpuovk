@@ -462,7 +462,7 @@ export default function RhythmScreen() {
   }, [router]);
 
   const handleDraftEmail = useCallback((entry: AttentionEntry) => {
-    console.log('[Rhythm] Draft Email pressed from Review modal —', entry.text);
+    if (__DEV__) { console.log('[Rhythm] Draft Email pressed from Review modal —', entry.text); }
     router.push({
       pathname: '/email-draft',
       params: {

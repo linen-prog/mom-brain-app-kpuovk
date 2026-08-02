@@ -50,7 +50,7 @@ export default function EmailDraftScreen() {
   const [copied, setCopied] = useState(false);
 
   const handleDraft = useCallback(async () => {
-    console.log('[EmailDraft] "Draft Email" pressed — context:', selectedContext, '| task:', taskText.slice(0, 60), '| recipient:', recipientName || 'none', '| child:', childName || 'none');
+    if (__DEV__) { console.log('[EmailDraft] "Draft Email" pressed — context:', selectedContext, '| task:', taskText.slice(0, 60), '| recipient:', recipientName || 'none', '| child:', childName || 'none'); }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     setError(null);
@@ -68,7 +68,7 @@ export default function EmailDraftScreen() {
       setDraftSubject(result.subject);
       setDraftBody(result.body);
       setHasDraft(true);
-      console.log('[EmailDraft] Draft received — subject:', result.subject);
+      if (__DEV__) { console.log('[EmailDraft] Draft received — subject:', result.subject); }
     } catch (err) {
       console.error('[EmailDraft] draftEmail error:', err);
       setError("Couldn't draft the email. Check your connection and try again.");
@@ -82,7 +82,7 @@ export default function EmailDraftScreen() {
     const subject = encodeURIComponent(draftSubject);
     const body = encodeURIComponent(draftBody);
     const mailto = `mailto:${to}?subject=${subject}&body=${body}`;
-    console.log('[EmailDraft] "Send via Mail App" pressed — subject:', draftSubject);
+    if (__DEV__) { console.log('[EmailDraft] "Send via Mail App" pressed — subject:', draftSubject); }
     Linking.openURL(mailto);
   }, [draftSubject, draftBody, recipientName]);
 

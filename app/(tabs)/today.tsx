@@ -112,7 +112,7 @@ export default function TodayScreen() {
     async (index: number) => {
       const key = `doToday:${index}`;
       const newValue = !completed[key];
-      console.log('[Today] checkbox toggled —', key, '=', newValue);
+      if (__DEV__) { console.log('[Today] checkbox toggled —', key, '=', newValue); }
       if (newValue) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         const phrase = DONE_PHRASES[index % DONE_PHRASES.length];
@@ -131,7 +131,7 @@ export default function TodayScreen() {
     async (index: number) => {
       const key = `thisWeek:${index}`;
       const newValue = !completed[key];
-      console.log('[Today] thisWeek checkbox toggled —', key, '=', newValue);
+      if (__DEV__) { console.log('[Today] thisWeek checkbox toggled —', key, '=', newValue); }
       if (newValue) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setToastMessage(DONE_PHRASES[index % DONE_PHRASES.length]);
@@ -148,7 +148,7 @@ export default function TodayScreen() {
     async (catKey: string, index: number) => {
       const key = `${catKey}:${index}`;
       const newValue = !completed[key];
-      console.log('[Today] category checkbox toggled —', key, '=', newValue);
+      if (__DEV__) { console.log('[Today] category checkbox toggled —', key, '=', newValue); }
       if (newValue) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setToastMessage(DONE_PHRASES[index % DONE_PHRASES.length]);
@@ -163,7 +163,7 @@ export default function TodayScreen() {
 
   const handleAddTask = useCallback(async () => {
     if (!addTaskModal || !addTaskText.trim()) return;
-    console.log('[Today] add task pressed — category:', addTaskModal.category, 'text:', addTaskText.trim());
+    if (__DEV__) { console.log('[Today] add task pressed — category:', addTaskModal.category, 'text:', addTaskText.trim()); }
     setAddTaskLoading(true);
     const updated = await addItemToCategory(addTaskModal.category, addTaskText.trim());
     if (updated) {
@@ -503,7 +503,7 @@ export default function TodayScreen() {
                               <TouchableOpacity
                                 style={styles.draftEmailInline}
                                 onPress={() => {
-                                  console.log('[Today] "Draft Email →" pressed for item:', item, '| category:', categoryModal.key);
+                                  if (__DEV__) { console.log('[Today] "Draft Email →" pressed for item:', item, '| category:', categoryModal.key); }
                                   setCategoryModal(null);
                                   router.push({
                                     pathname: '/email-draft',

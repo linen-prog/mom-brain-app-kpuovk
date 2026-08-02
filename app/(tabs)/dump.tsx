@@ -297,7 +297,7 @@ export default function DumpScreen() {
   const handleOrganize = useCallback(async () => {
     if (!text.trim()) return;
     const currentSource = typedExpanded ? 'typed' : (inputSource ?? 'voice');
-    console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length, '| kids:', kids.length, '| partner:', partnerName ?? 'none', '| inputSource:', currentSource);
+    if (__DEV__) { console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length, '| kids:', kids.length, '| partner:', partnerName ?? 'none', '| inputSource:', currentSource); }
     setInputSource(currentSource);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
@@ -549,7 +549,7 @@ export default function DumpScreen() {
 
   const handleScanScreenshots = useCallback(async () => {
     if (selectedImages.length === 0 || imageLoading) return;
-    console.log('[Image] "Scan Screenshot" pressed — images:', selectedImages.length, '| kids:', kids.length, '| partner:', partnerName ?? 'none');
+    if (__DEV__) { console.log('[Image] "Scan Screenshot" pressed — images:', selectedImages.length, '| kids:', kids.length, '| partner:', partnerName ?? 'none'); }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setImageLoading(true);
     setImageError(null);
@@ -612,7 +612,7 @@ export default function DumpScreen() {
   }, []);
 
   const handleDraftEmailFromPartner = useCallback((task: TaskMeta) => {
-    console.log('[Dump] Draft email pressed for partner task:', task.taskText);
+    if (__DEV__) { console.log('[Dump] Draft email pressed for partner task:', task.taskText); }
     setPartnerModalVisible(false);
     router.push({
       pathname: '/email-draft',

@@ -120,7 +120,7 @@ export default function ProfileScreen() {
   }, []);
 
   const openEditKid = useCallback((kid: KidProfile) => {
-    console.log('[Profile] Edit kid pressed —', kid.name);
+    if (__DEV__) { console.log('[Profile] Edit kid pressed —', kid.name); }
     setEditingKid(kid);
     setKidName(kid.name);
     setKidAge(kid.age !== undefined ? String(kid.age) : '');
@@ -131,7 +131,7 @@ export default function ProfileScreen() {
 
   const handleSaveKid = useCallback(async () => {
     if (!kidName.trim()) return;
-    console.log('[Profile] Save kid pressed —', kidName.trim(), '| editing:', editingKid?.id ?? 'new');
+    if (__DEV__) { console.log('[Profile] Save kid pressed —', kidName.trim(), '| editing:', editingKid?.id ?? 'new'); }
     const nicknames = kidNicknames.trim()
       ? kidNicknames.split(',').map((n) => n.trim()).filter(Boolean)
       : undefined;
@@ -161,7 +161,7 @@ export default function ProfileScreen() {
 
   const handleDeleteKid = useCallback(async () => {
     if (!editingKid) return;
-    console.log('[Profile] Delete kid pressed —', editingKid.name);
+    if (__DEV__) { console.log('[Profile] Delete kid pressed —', editingKid.name); }
     Alert.alert(
       `Remove ${editingKid.name}?`,
       'This will remove them from your kids list.',
@@ -171,7 +171,7 @@ export default function ProfileScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            console.log('[Profile] Delete kid confirmed —', editingKid.name);
+            if (__DEV__) { console.log('[Profile] Delete kid confirmed —', editingKid.name); }
             const updated = kids.filter((k) => k.id !== editingKid.id);
             await saveKids(updated);
             setKids(updated);
@@ -185,13 +185,13 @@ export default function ProfileScreen() {
   // ── Partner handlers ─────────────────────────────────────────────────────
 
   const openPartnerModal = useCallback(() => {
-    console.log('[Profile] Partner name row pressed — current:', partnerName ?? 'none');
+    if (__DEV__) { console.log('[Profile] Partner name row pressed — current:', partnerName ?? 'none'); }
     setPartnerNameInput(partnerName ?? '');
     setPartnerModalVisible(true);
   }, [partnerName]);
 
   const handleSavePartner = useCallback(async () => {
-    console.log('[Profile] Save partner name pressed —', partnerNameInput.trim());
+    if (__DEV__) { console.log('[Profile] Save partner name pressed —', partnerNameInput.trim()); }
     const name = partnerNameInput.trim();
     await savePartnerName(name);
     setPartnerName(name || null);
