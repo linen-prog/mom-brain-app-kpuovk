@@ -220,12 +220,12 @@ export default function ProfileScreen() {
 
   const handlePrivacyPolicy = useCallback(() => {
     console.log('[Profile] Privacy Policy pressed');
-    Linking.openURL('https://theosomatic.com/privacy');
+    Linking.openURL('https://hersomatic.com/mom-brain/privacy');
   }, []);
 
   const handleTermsOfUse = useCallback(() => {
     console.log('[Profile] Terms of Use pressed');
-    Linking.openURL('https://theosomatic.com/terms');
+    Linking.openURL('https://hersomatic.com/mom-brain/terms');
   }, []);
 
   const handleClearDumps = useCallback(() => {
@@ -272,6 +272,7 @@ export default function ProfileScreen() {
                   console.log('[Profile] Delete Account confirmed');
                   await clearAllData();
                   Alert.alert('Account deletion will be available before public launch.');
+                  Linking.openURL('https://hersomatic.com/mom-brain/delete-account');
                 },
               },
             ]);
