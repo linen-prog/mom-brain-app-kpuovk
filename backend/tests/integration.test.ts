@@ -1305,4 +1305,51 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("kidsInserted");
     });
   });
+
+  describe("DELETE /api/user", () => {
+    test("Delete authenticated user account", async () => {
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      // Sign up a new user for deletion
+      const { token } = await signUpTestUser();
+
+      const res = await authenticatedApi("/api/user", token, {
+        method: "DELETE",
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("success");
+      expect(data.success).toBe(true);
+      expect(data).toHaveProperty("message");
+      expect(typeof data.message).toBe("string");
+    });
+
+    test("Reject delete request without authentication", async () => {
+      const res = await api("/api/user", {
+        method: "DELETE",
+      });
+      await expectStatus(res, 401);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject delete with invalid token", async () => {
+      const res = await authenticatedApi("/api/user", "invalid-token-xyz", {
+        method: "DELETE",
+      });
+      await expectStatus(res, 401);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+
+    test("Reject delete with expired or malformed token", async () => {
+      const res = await authenticatedApi("/api/user", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.signature", {
+        method: "DELETE",
+      });
+      await expectStatus(res, 401);
+      const data = await res.json();
+      expect(data).toHaveProperty("error");
+    });
+  });
 });
