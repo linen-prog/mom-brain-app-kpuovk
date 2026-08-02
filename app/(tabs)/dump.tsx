@@ -41,6 +41,10 @@ import {
   TrackingItem,
   getOnboardingDone,
   setOnboardingDone,
+  getKidStages,
+  saveKidStages,
+  getFamilyPromptDismissed,
+  setFamilyPromptDismissed,
 } from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
@@ -156,6 +160,12 @@ export default function DumpScreen() {
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
 
+  // Kid stages (persisted)
+  const [kidStages, setKidStages] = useState<string[]>([]);
+
+  // Family prompt card
+  const [showFamilyPrompt, setShowFamilyPrompt] = useState(false);
+
   // Voice state
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -193,13 +203,25 @@ export default function DumpScreen() {
         resultsOpacity.setValue(1);
       }
     });
-    getKids().then(setKids);
     getPartnerName().then(setPartnerName);
-    getOnboardingDone().then((done) => {
+    getKidStages().then(setKidStages);
+    getOnboardingDone().then(async (done) => {
       if (!done) {
         console.log('[Dump] First launch — showing onboarding modal');
         setOnboardingVisible(true);
+      } else {
+        // Check family prompt: show if onboarding done, no kids, and not dismissed
+        const [kidsLoaded, dismissed] = await Promise.all([getKids(), getFamilyPromptDismissed()]);
+        setKids(kidsLoaded);
+        if (!dismissed && kidsLoaded.length === 0) {
+          setShowFamilyPrompt(true);
+        }
       }
+    });
+    // Load kids for the non-onboarding path too (handled above in the else branch)
+    // but we still need kids for the onboarding path
+    getKids().then((kidsLoaded) => {
+      setKids(kidsLoaded);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -286,6 +308,7 @@ export default function DumpScreen() {
       const raw = await organizeText(text.trim(), {
         kids: kids.length > 0 ? kids : undefined,
         partnerName: partnerName ?? undefined,
+        stages: kidStages.length > 0 ? kidStages : undefined,
       });
       const normalized = normalizeResponse(raw);
 
@@ -346,7 +369,7 @@ export default function DumpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [text, kids, partnerName, resultsOpacity, helperOpacity, inputSource, typedExpanded]);
+  }, [text, kids, partnerName, kidStages, resultsOpacity, helperOpacity, inputSource, typedExpanded]);
 
   // ── Voice: tap mic button ────────────────────────────────────────────────
   const handleMicPress = useCallback(async () => {
@@ -536,6 +559,7 @@ export default function DumpScreen() {
       const response = await organizeImages(payload, {
         kids: kids.length > 0 ? kids : undefined,
         partnerName: partnerName ?? undefined,
+        stages: kidStages.length > 0 ? kidStages : undefined,
       });
 
       if (response.noActionableContent) {
@@ -570,7 +594,7 @@ export default function DumpScreen() {
     } finally {
       setImageLoading(false);
     }
-  }, [selectedImages, imageLoading, kids, partnerName, router]);
+  }, [selectedImages, imageLoading, kids, partnerName, kidStages, router]);
 
   // ── Partner tasks modal ──────────────────────────────────────────────────
   const partnerTasks: TaskMeta[] = result?.taskMeta?.filter((m) => m.isPartnerTask) ?? [];
@@ -580,6 +604,12 @@ export default function DumpScreen() {
     console.log('[Dump] "Things on someone else\'s plate" pressed — tasks:', partnerTasks.length);
     setPartnerModalVisible(true);
   }, [partnerTasks.length]);
+
+  const handleDismissFamilyPrompt = useCallback(async () => {
+    console.log('[Dump] Family prompt dismissed');
+    await setFamilyPromptDismissed();
+    setShowFamilyPrompt(false);
+  }, []);
 
   const handleDraftEmailFromPartner = useCallback((task: TaskMeta) => {
     console.log('[Dump] Draft email pressed for partner task:', task.taskText);
@@ -689,6 +719,26 @@ export default function DumpScreen() {
           <Text style={styles.appNameHeart}>{'♡'}</Text>
         </View>
         <Text style={styles.tagline}>Say it messy. I'll sort it out.</Text>
+
+        {/* Family prompt card */}
+        {showFamilyPrompt && (
+          <View style={styles.familyPromptCard}>
+            <View style={styles.familyPromptContent}>
+              <Text style={styles.familyPromptText}>
+                Want Mom Brain to recognize your kids' names? Add your family in Profile — it makes everything smarter.
+              </Text>
+              <TouchableOpacity onPress={() => {
+                console.log('[Dump] Family prompt "Add My Family" pressed');
+                router.push('/(tabs)/profile');
+              }} style={styles.familyPromptButton}>
+                <Text style={styles.familyPromptButtonText}>Add My Family</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={handleDismissFamilyPrompt} style={styles.familyPromptDismiss}>
+              <Text style={styles.familyPromptDismissText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Input card */}
         <View style={styles.inputCard}>
@@ -1100,12 +1150,16 @@ export default function DumpScreen() {
               })}
             </View>
 
+            <Text style={styles.onboardingPrivacyNote}>Your lists live safely on this device.</Text>
+
             <TouchableOpacity
               style={styles.onboardingGetStarted}
               activeOpacity={0.85}
               onPress={() => {
                 console.log('[Dump] Onboarding "Get Started" pressed — stages:', selectedStages);
                 setOnboardingDone();
+                saveKidStages(selectedStages);
+                setKidStages(selectedStages);
                 setOnboardingVisible(false);
               }}
             >
@@ -1116,6 +1170,8 @@ export default function DumpScreen() {
               onPress={() => {
                 console.log('[Dump] Onboarding "Skip" pressed');
                 setOnboardingDone();
+                saveKidStages([]);
+                setKidStages([]);
                 setOnboardingVisible(false);
               }}
               activeOpacity={0.7}
@@ -1871,5 +1927,48 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: 'Nunito_700Bold',
     color: '#FFFFFF',
+  },
+  // Family prompt card
+  familyPromptCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF5F0',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'flex-start',
+  },
+  familyPromptContent: {
+    flex: 1,
+  },
+  familyPromptText: {
+    fontSize: 13,
+    color: Colors.textBody,
+    lineHeight: 18,
+    marginBottom: 8,
+    fontFamily: 'Nunito_400Regular',
+  },
+  familyPromptButton: {
+    alignSelf: 'flex-start',
+  },
+  familyPromptButtonText: {
+    fontSize: 13,
+    color: Colors.primaryDeepRose,
+    fontWeight: '600',
+    fontFamily: 'Nunito_700Bold',
+  },
+  familyPromptDismiss: {
+    paddingLeft: 10,
+    paddingTop: 2,
+  },
+  familyPromptDismissText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+  // Onboarding privacy note
+  onboardingPrivacyNote: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+    textAlign: 'center',
+    marginBottom: 4,
   },
 });

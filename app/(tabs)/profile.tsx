@@ -389,7 +389,7 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <Text style={styles.accountHelper}>
-                Mom Brain keeps your organized lists connected to your account.
+                Your lists live on this device. Signing in keeps your account connected.
               </Text>
               <Pressable
                 style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.8 }]}

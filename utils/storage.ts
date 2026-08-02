@@ -4,6 +4,8 @@ const DUMP_KEY = 'mombrain.latestDump';
 const KIDS_KEY = 'mombrain.kids';
 const PARTNER_KEY = 'mombrain.partnerName';
 const ONBOARDING_KEY = 'mombrain.onboardingDone';
+const KID_STAGES_KEY = 'mombrain.kidStages';
+const FAMILY_PROMPT_KEY = 'mombrain.familyPromptDismissed';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -166,11 +168,41 @@ export async function clearDumpHistory(): Promise<void> {
 
 export async function clearAllData(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([DUMP_KEY, HISTORY_KEY]);
-    console.log('[Storage] clearAllData — cleared both keys');
+    await AsyncStorage.multiRemove([DUMP_KEY, HISTORY_KEY, KID_STAGES_KEY, FAMILY_PROMPT_KEY]);
+    console.log('[Storage] clearAllData — cleared all keys');
   } catch (err) {
     console.error('[Storage] clearAllData error:', err);
   }
+}
+
+// ─── Kid stages storage ───────────────────────────────────────────────────────
+
+export async function getKidStages(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(KID_STAGES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch { return []; }
+}
+
+export async function saveKidStages(stages: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KID_STAGES_KEY, JSON.stringify(stages));
+  } catch (err) {
+    console.error('[Storage] saveKidStages error:', err);
+  }
+}
+
+// ─── Family prompt dismissed storage ─────────────────────────────────────────
+
+export async function getFamilyPromptDismissed(): Promise<boolean> {
+  try { return (await AsyncStorage.getItem(FAMILY_PROMPT_KEY)) === 'true'; }
+  catch { return false; }
+}
+
+export async function setFamilyPromptDismissed(): Promise<void> {
+  try { await AsyncStorage.setItem(FAMILY_PROMPT_KEY, 'true'); }
+  catch {}
 }
 
 // ─── Kids storage ─────────────────────────────────────────────────────────────

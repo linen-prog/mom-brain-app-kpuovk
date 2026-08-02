@@ -202,7 +202,7 @@ export class OrganizeError extends Error {
 
 export async function organizeText(
   text: string,
-  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string }
+  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string; stages?: string[] }
 ): Promise<OrganizeResponse> {
   console.log('[organizeText] Calling POST /api/organize', { textLength: text.length, options });
   try {
@@ -210,6 +210,7 @@ export async function organizeText(
       text,
       kids: options?.kids,
       partnerName: options?.partnerName,
+      stages: options?.stages,
     });
     console.log('[organizeText] Success', { categories: Object.keys(result) });
     return result;
@@ -255,7 +256,7 @@ export async function draftEmail(params: DraftEmailParams): Promise<DraftEmailRe
 
 export async function organizeImages(
   images: Array<{ base64: string; mimeType: string }>,
-  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string }
+  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string; stages?: string[] }
 ): Promise<OrganizeResponse> {
   console.log('[organizeImages] Calling POST /api/organize-image', { imageCount: images.length, options });
   try {
@@ -263,6 +264,7 @@ export async function organizeImages(
       images,
       kids: options?.kids,
       partnerName: options?.partnerName,
+      stages: options?.stages,
     });
     console.log('[organizeImages] Success', { categories: Object.keys(result) });
     return result;

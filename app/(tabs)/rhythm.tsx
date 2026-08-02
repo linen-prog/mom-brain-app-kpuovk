@@ -687,7 +687,7 @@ export default function RhythmScreen() {
                   key={idx}
                   style={styles.attentionRow}
                   activeOpacity={0.75}
-                  onPress={() => console.log('[Rhythm] attention item pressed:', entry.text)}
+                  onPress={() => setReviewModalVisible(true)}
                 >
                   <View style={styles.attentionIconCircle}>
                     <Feather name={iconName} size={16} color={Colors.primaryDeepRose} />
