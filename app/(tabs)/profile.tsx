@@ -14,6 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import Constants from 'expo-constants';
 import { Colors } from '@/constants/Colors';
@@ -25,6 +26,7 @@ import {
   savePartnerName,
   KidProfile,
 } from '@/utils/storage';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,8 +93,10 @@ export default function ProfileScreen() {
   const [partnerModalVisible, setPartnerModalVisible] = useState(false);
   const [partnerNameInput, setPartnerNameInput] = useState('');
 
-  const isSignedIn = false;
-  const userEmail: string | null = null;
+  const { user, signOut } = useAuth();
+  const isSignedIn = !!user;
+  const userEmail: string | null = user?.email ?? null;
+  const router = useRouter();
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   // ── Load data ────────────────────────────────────────────────────────────
@@ -271,6 +275,7 @@ export default function ProfileScreen() {
                 onPress: async () => {
                   console.log('[Profile] Delete Account confirmed');
                   await clearAllData();
+                  await signOut();
                   Alert.alert('Account deletion will be available before public launch.');
                   Linking.openURL('https://hersomatic.com/mom-brain/delete-account');
                 },
@@ -280,20 +285,20 @@ export default function ProfileScreen() {
         },
       ]
     );
-  }, [isSignedIn]);
+  }, [user, signOut]);
 
   const handleSignIn = useCallback(() => {
     console.log('[Profile] Sign In pressed');
-    Alert.alert('Sign In', 'Account sign-in will be available in an upcoming update. Your lists are safely stored on this device.', [{ text: 'OK' }]);
-  }, []);
+    router.push('/auth-screen');
+  }, [router]);
 
   const handleSignOut = useCallback(() => {
     console.log('[Profile] Sign Out pressed');
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => {} },
+      { text: 'Sign Out', style: 'destructive', onPress: async () => { await signOut(); } },
     ]);
-  }, []);
+  }, [signOut]);
 
   const handleContactSupport = useCallback(() => {
     console.log('[Profile] Contact Support pressed');
