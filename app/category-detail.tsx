@@ -184,7 +184,7 @@ export default function CategoryDetailScreen() {
           <View style={styles.backButton} />
         </View>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No dump found. Head to Dump to get started.</Text>
+          <Text style={styles.emptyText}>Nothing here yet. Head to Brain to get started.</Text>
         </View>
       </View>
     );

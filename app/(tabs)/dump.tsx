@@ -1025,7 +1025,7 @@ export default function DumpScreen() {
                   </View>
                 </View>
                 <Text style={styles.trackingSubtitle}>
-                  Watching, not doing — these will remind you when the time comes.
+                  Watching, not doing — so you don't have to hold them in your head.
                 </Text>
                 <View style={styles.trackingList}>
                   {trackingItems.map((item) => {

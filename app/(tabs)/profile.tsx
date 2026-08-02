@@ -27,6 +27,8 @@ import {
   KidProfile,
 } from '@/utils/storage';
 import { useAuth } from '@/contexts/AuthContext';
+import { clearAuthTokens } from '@/lib/auth';
+import { authenticatedDeleteRaw } from '@/utils/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -255,37 +257,50 @@ export default function ProfileScreen() {
   const handleDeleteAccount = useCallback(() => {
     console.log('[Profile] Delete Account pressed');
     if (!isSignedIn) {
-      Alert.alert('No Account Found', 'Account deletion will be available once you sign in. Your local data can be cleared using "Clear Saved Brain Dumps."', [{ text: 'OK' }]);
+      Alert.alert('No account found', 'Sign in first to delete your account.', [{ text: 'OK' }]);
       return;
     }
     Alert.alert(
-      'Delete Account?',
-      'This will permanently delete your Mom Brain account and all associated data. This cannot be undone.',
+      'Delete your account?',
+      "This permanently deletes your account and all data on this device. This can't be undone.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Account',
+          text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Are you sure?', 'Your account and all data will be permanently deleted.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Yes, Delete',
-                style: 'destructive',
-                onPress: async () => {
-                  console.log('[Profile] Delete Account confirmed');
-                  await clearAllData();
-                  await signOut();
-                  Alert.alert('Account deletion will be available before public launch.');
-                  Linking.openURL('https://hersomatic.com/mom-brain/delete-account');
-                },
-              },
-            ]);
+          onPress: async () => {
+            console.log('[Profile] Delete Account confirmed — calling DELETE /api/user');
+            try {
+              const response = await authenticatedDeleteRaw('/api/user');
+              if (!response.ok) {
+                const text = await response.text();
+                console.error('[Profile] DELETE /api/user failed —', response.status, text);
+                throw new Error(`${response.status}: ${text}`);
+              }
+              console.log('[Profile] DELETE /api/user succeeded — clearing data and redirecting');
+              await clearAllData();
+              await clearAuthTokens();
+              router.replace('/auth-screen');
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error('[Profile] Delete Account error —', msg);
+              Alert.alert(
+                "Couldn't delete account",
+                'Something went wrong. Please try again or visit hersomatic.com/mom-brain/delete-account for help.',
+                [
+                  { text: 'OK' },
+                  {
+                    text: 'Visit Help Page',
+                    onPress: () => Linking.openURL('https://hersomatic.com/mom-brain/delete-account'),
+                  },
+                ]
+              );
+            }
           },
         },
       ]
     );
-  }, [user, signOut]);
+  }, [user, signOut, router]);
 
   const handleSignIn = useCallback(() => {
     console.log('[Profile] Sign In pressed');

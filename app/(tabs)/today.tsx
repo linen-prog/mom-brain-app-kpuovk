@@ -177,7 +177,7 @@ export default function TodayScreen() {
   }, [addTaskModal, addTaskText]);
 
   const handleGoDump = useCallback(() => {
-    console.log('[Today] "Go to Dump" pressed');
+    console.log('[Today] "Go to Brain" pressed');
     router.push('/(tabs)/dump');
   }, [router]);
 
@@ -197,8 +197,8 @@ export default function TodayScreen() {
         <EmptyState
           icon={<Sun size={32} color={Colors.primaryBlush} />}
           headline="Nothing here yet"
-          body="When you're ready, head to Dump and say what's on your mind. I'll find what matters today."
-          ctaLabel="Go to Dump"
+          body="When you're ready, head to Brain and say what's on your mind. I'll find what matters today."
+          ctaLabel="Go to Brain"
           onCta={handleGoDump}
         />
       </View>

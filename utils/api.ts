@@ -141,6 +141,22 @@ export const authenticatedDelete = async <T = any>(endpoint: string, data: any =
   });
 };
 
+export const authenticatedDeleteRaw = async (endpoint: string, data: any = {}): Promise<Response> => {
+  const token = await getBearerToken();
+  if (!token) {
+    throw new Error("Authentication token not found. Please sign in.");
+  }
+  const url = `${BACKEND_URL}${endpoint}`;
+  return fetch(url, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+};
+
 export interface OrganizeResponse {
   doToday: string[];
   thisWeek: string[];

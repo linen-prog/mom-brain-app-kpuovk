@@ -427,7 +427,7 @@ export default function RhythmScreen() {
   );
 
   const handleGoDump = useCallback(() => {
-    console.log('[Rhythm] "Go to Dump" pressed from empty state');
+    console.log('[Rhythm] "Go to Brain" pressed from empty state');
     router.push('/(tabs)/dump');
   }, [router]);
 
@@ -500,8 +500,8 @@ export default function RhythmScreen() {
         <EmptyState
           icon={<Sparkles size={32} color={Colors.lavender} />}
           headline="Nothing here yet"
-          body="Head to Dump and say what's on your mind. Once you've organized a brain dump, I'll show you your weekly rhythm."
-          ctaLabel="Go to Dump"
+          body="Head to Brain and say what's on your mind. Once you've organized a brain dump, I'll show you your weekly rhythm."
+          ctaLabel="Go to Brain"
           onCta={handleGoDump}
         />
       </View>
