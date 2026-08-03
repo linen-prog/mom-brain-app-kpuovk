@@ -168,19 +168,19 @@ export interface OrganizeResponse {
   holdingForLater: string[];
   work?: string[];
   momCheckIn: string;
-  taskMeta?: Array<{
+  taskMeta?: {
     taskText: string;
     category: 'doToday' | 'thisWeek' | 'kids' | 'home' | 'errands' | 'meals' | 'messages' | 'work' | 'holdingForLater';
     childName?: string | null;
     delegation: 'me' | 'partner' | 'coparent' | 'kid';
     isPartnerTask: boolean;
-  }>;
-  trackingItems?: Array<{
+  }[];
+  trackingItems?: {
     id: string;
     text: string;
     dueDate?: string | null;
     category: 'tracking';
-  }>;
+  }[];
   rhythmInsights?: {
     topCategories: string[];
     recurringThemes: string[];
@@ -202,7 +202,7 @@ export class OrganizeError extends Error {
 
 export async function organizeText(
   text: string,
-  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string; stages?: string[] }
+  options?: { kids?: { name: string; age?: number; grade?: string; nicknames?: string[] }[]; partnerName?: string; stages?: string[] }
 ): Promise<OrganizeResponse> {
   console.log('[organizeText] Calling POST /api/organize', { textLength: text.length, options });
   try {
@@ -255,8 +255,8 @@ export async function draftEmail(params: DraftEmailParams): Promise<DraftEmailRe
 }
 
 export async function organizeImages(
-  images: Array<{ base64: string; mimeType: string }>,
-  options?: { kids?: Array<{ name: string; age?: number; grade?: string; nicknames?: string[] }>; partnerName?: string; stages?: string[] }
+  images: { base64: string; mimeType: string }[],
+  options?: { kids?: { name: string; age?: number; grade?: string; nicknames?: string[] }[]; partnerName?: string; stages?: string[] }
 ): Promise<OrganizeResponse> {
   console.log('[organizeImages] Calling POST /api/organize-image', { imageCount: images.length, options });
   try {

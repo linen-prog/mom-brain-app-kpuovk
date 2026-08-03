@@ -13,6 +13,7 @@ function TabIcon({ icon, color }: { icon: string; color: string }) {
 }
 
 export default function TabLayout() {
+
   const insets = useSafeAreaInsets();
   const bottomPad = insets.bottom > 0 ? insets.bottom : 12;
 

@@ -20,6 +20,8 @@ import { Colors, CategoryColors } from '@/constants/Colors';
 import { getLatestDump, updateCompleted, addItemToCategory, OrganizedDump, TaskMeta } from '@/utils/storage';
 import { EmptyState } from '@/components/EmptyState';
 import { Toast } from '@/components/Toast';
+import { useIsPremium } from '@/hooks/useIsPremium';
+import { UpgradeSheet } from '@/components/UpgradeSheet';
 
 const DONE_PHRASES = [
   "Done. One less thing.",
@@ -74,6 +76,8 @@ const circleStyles = StyleSheet.create({
 export default function TodayScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isPremium = useIsPremium();
+  const [upgradeSheetVisible, setUpgradeSheetVisible] = useState(false);
   const [dump, setDump] = useState<OrganizedDump | null>(null);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -449,6 +453,13 @@ export default function TodayScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Upgrade sheet */}
+      <UpgradeSheet
+        visible={upgradeSheetVisible}
+        onClose={() => setUpgradeSheetVisible(false)}
+        reason="email"
+      />
+
       {/* Category Detail Modal */}
       {categoryModal && dump && (
         <Modal
@@ -504,6 +515,12 @@ export default function TodayScreen() {
                                 style={styles.draftEmailInline}
                                 onPress={() => {
                                   if (__DEV__) { console.log('[Today] "Draft Email →" pressed for item:', item, '| category:', categoryModal.key); }
+                                  if (!isPremium) {
+                                    console.log('[Today] Email draft blocked — not premium');
+                                    setCategoryModal(null);
+                                    setUpgradeSheetVisible(true);
+                                    return;
+                                  }
                                   setCategoryModal(null);
                                   router.push({
                                     pathname: '/email-draft',

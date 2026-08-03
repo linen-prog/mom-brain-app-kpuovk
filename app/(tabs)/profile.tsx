@@ -304,7 +304,7 @@ export default function ProfileScreen() {
         },
       ]
     );
-  }, [user, signOut, router]);
+  }, [user, signOut, router, isSignedIn]);
 
   const handleSignIn = useCallback(() => {
     console.log('[Profile] Sign In pressed');

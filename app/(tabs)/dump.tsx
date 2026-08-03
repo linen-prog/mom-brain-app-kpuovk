@@ -46,7 +46,10 @@ import {
   getFamilyPromptDismissed,
   setFamilyPromptDismissed,
   incrementDumpCount,
+  getDumpCountThisMonth,
 } from '@/utils/storage';
+import { useIsPremium } from '@/hooks/useIsPremium';
+import { UpgradeSheet } from '@/components/UpgradeSheet';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -154,6 +157,11 @@ export default function DumpScreen() {
   const [kids, setKids] = useState<KidProfile[]>([]);
   const [partnerName, setPartnerName] = useState<string | null>(null);
 
+  // Premium / upgrade
+  const isPremium = useIsPremium();
+  const [upgradeSheetVisible, setUpgradeSheetVisible] = useState(false);
+  const [dumpsThisMonth, setDumpsThisMonth] = useState(0);
+
   // Partner tasks modal
   const [partnerModalVisible, setPartnerModalVisible] = useState(false);
 
@@ -197,6 +205,7 @@ export default function DumpScreen() {
 
   // ── Load saved dump + kids + partner + onboarding check ─────────────────
   useEffect(() => {
+    getDumpCountThisMonth().then(setDumpsThisMonth);
     getLatestDump().then((dump) => {
       if (dump) {
         setLastOrganized(dump.createdAt);
@@ -296,6 +305,14 @@ export default function DumpScreen() {
 
   // ── Organize handler ─────────────────────────────────────────────────────
   const handleOrganize = useCallback(async () => {
+    // Check dump limit for free users
+    const currentCount = await getDumpCountThisMonth();
+    setDumpsThisMonth(currentCount);
+    if (!isPremium && currentCount >= 5) {
+      console.log('[Dump] Free limit reached — showing upgrade sheet | count:', currentCount);
+      setUpgradeSheetVisible(true);
+      return;
+    }
     if (!text.trim()) return;
     const currentSource = typedExpanded ? 'typed' : (inputSource ?? 'voice');
     if (__DEV__) { console.log('[Dump] "Organize My Brain" pressed — text length:', text.trim().length, '| kids:', kids.length, '| partner:', partnerName ?? 'none', '| inputSource:', currentSource); }
@@ -346,6 +363,7 @@ export default function DumpScreen() {
       await saveLatestDump(dump);
       await saveDumpToHistory(dump);
       await incrementDumpCount();
+      setDumpsThisMonth(prev => prev + 1);
       setResult(dump);
       setLastOrganized(dump.createdAt);
       setText('');
@@ -371,7 +389,7 @@ export default function DumpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [text, kids, partnerName, kidStages, resultsOpacity, helperOpacity, inputSource, typedExpanded]);
+  }, [text, kids, partnerName, kidStages, resultsOpacity, helperOpacity, inputSource, typedExpanded, isPremium]);
 
   // ── Voice: tap mic button ────────────────────────────────────────────────
   const handleMicPress = useCallback(async () => {
@@ -550,6 +568,13 @@ export default function DumpScreen() {
   }, []);
 
   const handleScanScreenshots = useCallback(async () => {
+    const currentCount = await getDumpCountThisMonth();
+    setDumpsThisMonth(currentCount);
+    if (!isPremium && currentCount >= 5) {
+      console.log('[Image] Free limit reached — showing upgrade sheet | count:', currentCount);
+      setUpgradeSheetVisible(true);
+      return;
+    }
     if (selectedImages.length === 0 || imageLoading) return;
     if (__DEV__) { console.log('[Image] "Scan Screenshot" pressed — images:', selectedImages.length, '| kids:', kids.length, '| partner:', partnerName ?? 'none'); }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -596,7 +621,7 @@ export default function DumpScreen() {
     } finally {
       setImageLoading(false);
     }
-  }, [selectedImages, imageLoading, kids, partnerName, kidStages, router]);
+  }, [selectedImages, imageLoading, kids, partnerName, kidStages, router, isPremium]);
 
   // ── Partner tasks modal ──────────────────────────────────────────────────
   const partnerTasks: TaskMeta[] = result?.taskMeta?.filter((m) => m.isPartnerTask) ?? [];
@@ -615,6 +640,12 @@ export default function DumpScreen() {
 
   const handleDraftEmailFromPartner = useCallback((task: TaskMeta) => {
     if (__DEV__) { console.log('[Dump] Draft email pressed for partner task:', task.taskText); }
+    if (!isPremium) {
+      console.log('[Dump] Email draft blocked — not premium');
+      setPartnerModalVisible(false);
+      setUpgradeSheetVisible(true);
+      return;
+    }
     setPartnerModalVisible(false);
     router.push({
       pathname: '/email-draft',
@@ -624,7 +655,7 @@ export default function DumpScreen() {
         category: task.category,
       },
     });
-  }, [router]);
+  }, [router, isPremium]);
 
   // ── Derived display values ───────────────────────────────────────────────
   const isDisabled = !text.trim() || loading;
@@ -949,6 +980,15 @@ export default function DumpScreen() {
           <Text style={styles.lastOrganized}>{hintText}</Text>
         )}
 
+        {/* Dump counter indicator for free users */}
+        {!isPremium && dumpsThisMonth >= 3 && (
+          <Text style={styles.dumpsLeftIndicator}>
+            {5 - dumpsThisMonth > 0
+              ? `${5 - dumpsThisMonth} dump${5 - dumpsThisMonth === 1 ? '' : 's'} left this month`
+              : "You've used your free dumps this month"}
+          </Text>
+        )}
+
         {/* Organize button */}
         <PrimaryButton
           label="Organize My Brain  ✦"
@@ -1163,6 +1203,7 @@ export default function DumpScreen() {
                 saveKidStages(selectedStages);
                 setKidStages(selectedStages);
                 setOnboardingVisible(false);
+                router.replace('/paywall');
               }}
             >
               <Text style={styles.onboardingGetStartedText}>Get Started  ✦</Text>
@@ -1183,6 +1224,13 @@ export default function DumpScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Upgrade sheet */}
+      <UpgradeSheet
+        visible={upgradeSheetVisible}
+        onClose={() => setUpgradeSheetVisible(false)}
+        reason="dump_limit"
+      />
 
       {/* Partner tasks modal */}
       <Modal
@@ -1516,6 +1564,13 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 4,
+  },
+  dumpsLeftIndicator: {
+    fontSize: 13,
+    color: '#9E8E87',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'Nunito_400Regular',
   },
   reassuranceRow: {
     flexDirection: 'row',

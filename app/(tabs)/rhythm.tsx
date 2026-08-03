@@ -15,6 +15,8 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { getLatestDump, getDumpHistory, OrganizedDump, TrackingItem, TaskMeta } from '@/utils/storage';
 import { EmptyState } from '@/components/EmptyState';
+import { useIsPremium } from '@/hooks/useIsPremium';
+import { UpgradeSheet } from '@/components/UpgradeSheet';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -408,6 +410,8 @@ function formatWeekLabel(createdAt: string): string {
 export default function RhythmScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isPremium = useIsPremium();
+  const [upgradeSheetVisible, setUpgradeSheetVisible] = useState(false);
   const [dump, setDump] = useState<OrganizedDump | null>(null);
   const [history, setHistory] = useState<OrganizedDump[]>([]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -447,9 +451,14 @@ export default function RhythmScreen() {
   }, [router]);
 
   const handleSeeCalendar = useCallback(() => {
-    console.log('[Rhythm] "See calendar" pressed — opening Coming Up modal');
+    console.log('[Rhythm] "See calendar" pressed');
+    if (!isPremium) {
+      console.log('[Rhythm] Coming Up blocked — not premium');
+      setUpgradeSheetVisible(true);
+      return;
+    }
     setComingUpVisible(true);
-  }, []);
+  }, [isPremium]);
 
   const handleReview = useCallback(() => {
     console.log('[Rhythm] "Review" pressed — opening modal');
@@ -463,6 +472,12 @@ export default function RhythmScreen() {
 
   const handleDraftEmail = useCallback((entry: AttentionEntry) => {
     if (__DEV__) { console.log('[Rhythm] Draft Email pressed from Review modal —', entry.text); }
+    if (!isPremium) {
+      console.log('[Rhythm] Email draft blocked — not premium');
+      setReviewModalVisible(false);
+      setUpgradeSheetVisible(true);
+      return;
+    }
     router.push({
       pathname: '/email-draft',
       params: {
@@ -471,7 +486,7 @@ export default function RhythmScreen() {
         category: 'messages',
       },
     });
-  }, [router]);
+  }, [router, isPremium]);
 
   const handleDelegate = useCallback((key: string) => {
     console.log('[Rhythm] Delegate pressed —', key);
@@ -480,6 +495,34 @@ export default function RhythmScreen() {
 
   // ── Displayed dump (history-aware) ──
   const displayDump = history.length > 0 ? (history[historyIndex] ?? dump) : dump;
+
+  // ── Locked state for free users ──
+  if (!isPremium) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#FAF4EC' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingTop: insets.top + 40 }}>
+          <Text style={{ fontSize: 32, marginBottom: 16 }}>{'∿'}</Text>
+          <Text style={{ fontSize: 20, fontFamily: 'Nunito_600SemiBold', color: '#3F312C', textAlign: 'center', marginBottom: 12 }}>
+            {'Your weekly Rhythm lives here.'}
+          </Text>
+          <Text style={{ fontSize: 15, fontFamily: 'Nunito_400Regular', color: '#9E8E87', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+            {'See what got done, what\'s rolling over, and what\'s coming up.'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Rhythm] "Unlock with Premium" pressed');
+              setUpgradeSheetVisible(true);
+            }}
+            style={{ backgroundColor: '#8B4A52', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32 }}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Nunito_600SemiBold' }}>{'Unlock with Premium'}</Text>
+          </TouchableOpacity>
+        </View>
+        <UpgradeSheet visible={upgradeSheetVisible} onClose={() => setUpgradeSheetVisible(false)} reason="rhythm" />
+      </View>
+    );
+  }
 
   // ── Empty state ──
   if (!displayDump) {

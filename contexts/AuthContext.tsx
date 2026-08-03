@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import Constants from "expo-constants";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
 import { runMigration } from "@/utils/migration";
 
@@ -164,7 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = async () => {
     if (Platform.OS === "ios") {
       // Native Apple Sign In on iOS — shows the system Face ID / password modal
-      const AppleAuthentication = require("expo-apple-authentication");
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
