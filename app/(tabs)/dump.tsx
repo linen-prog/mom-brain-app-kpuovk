@@ -45,6 +45,7 @@ import {
   saveKidStages,
   getFamilyPromptDismissed,
   setFamilyPromptDismissed,
+  incrementDumpCount,
 } from '@/utils/storage';
 import { MomCheckInCard } from '@/components/MomCheckInCard';
 import { CategorySection } from '@/components/CategorySection';
@@ -344,6 +345,7 @@ export default function DumpScreen() {
       };
       await saveLatestDump(dump);
       await saveDumpToHistory(dump);
+      await incrementDumpCount();
       setResult(dump);
       setLastOrganized(dump.createdAt);
       setText('');

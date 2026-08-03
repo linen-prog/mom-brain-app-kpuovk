@@ -168,10 +168,55 @@ export async function clearDumpHistory(): Promise<void> {
 
 export async function clearAllData(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([DUMP_KEY, HISTORY_KEY, KID_STAGES_KEY, FAMILY_PROMPT_KEY]);
+    await AsyncStorage.multiRemove([DUMP_KEY, HISTORY_KEY, KID_STAGES_KEY, FAMILY_PROMPT_KEY, DUMP_USAGE_KEY]);
     console.log('[Storage] clearAllData — cleared all keys');
   } catch (err) {
     console.error('[Storage] clearAllData error:', err);
+  }
+}
+
+// ─── Dump usage counting ──────────────────────────────────────────────────────
+
+const DUMP_USAGE_KEY = 'mombrain.dumpUsage';
+
+interface DumpUsage {
+  month: string; // format: "YYYY-MM", e.g. "2026-07"
+  count: number;
+}
+
+export async function getDumpCountThisMonth(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(DUMP_USAGE_KEY);
+    if (!raw) return 0;
+    const usage = JSON.parse(raw) as DumpUsage;
+    const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    if (usage.month !== currentMonth) return 0; // month rolled over, treat as 0
+    return usage.count;
+  } catch (err) {
+    console.error('[Storage] getDumpCountThisMonth error:', err);
+    return 0;
+  }
+}
+
+export async function incrementDumpCount(): Promise<number> {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const raw = await AsyncStorage.getItem(DUMP_USAGE_KEY);
+    let usage: DumpUsage = { month: currentMonth, count: 0 };
+    if (raw) {
+      const parsed = JSON.parse(raw) as DumpUsage;
+      if (parsed.month === currentMonth) {
+        usage = parsed;
+      }
+      // if month differs, usage stays reset to { month: currentMonth, count: 0 }
+    }
+    usage.count += 1;
+    await AsyncStorage.setItem(DUMP_USAGE_KEY, JSON.stringify(usage));
+    console.log('[Storage] incrementDumpCount — month:', currentMonth, '| new count:', usage.count);
+    return usage.count;
+  } catch (err) {
+    console.error('[Storage] incrementDumpCount error:', err);
+    return 0;
   }
 }
 

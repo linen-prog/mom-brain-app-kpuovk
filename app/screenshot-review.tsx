@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Colors, CategoryColors } from '@/constants/Colors';
 import { OrganizeImageResponse } from '@/utils/api';
-import { getLatestDump, saveLatestDump, OrganizedDump } from '@/utils/storage';
+import { getLatestDump, saveLatestDump, OrganizedDump, incrementDumpCount } from '@/utils/storage';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -125,6 +125,7 @@ export default function ScreenshotReviewScreen() {
           };
 
       await saveLatestDump(merged);
+      await incrementDumpCount();
       console.log('[ScreenshotReview] Saved merged dump — id:', merged.id);
 
       router.replace('/(tabs)/dump');

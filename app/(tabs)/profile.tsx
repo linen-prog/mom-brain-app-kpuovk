@@ -25,6 +25,7 @@ import {
   getPartnerName,
   savePartnerName,
   KidProfile,
+  getDumpCountThisMonth,
 } from '@/utils/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { clearAuthTokens } from '@/lib/auth';
@@ -90,6 +91,8 @@ export default function ProfileScreen() {
   const [kidGrade, setKidGrade] = useState('');
   const [kidNicknames, setKidNicknames] = useState('');
 
+  const [dumpCountThisMonth, setDumpCountThisMonth] = useState<number>(0);
+
   // Partner name state
   const [partnerName, setPartnerName] = useState<string | null>(null);
   const [partnerModalVisible, setPartnerModalVisible] = useState(false);
@@ -105,6 +108,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     getKids().then(setKids);
     getPartnerName().then(setPartnerName);
+    getDumpCountThisMonth().then(setDumpCountThisMonth);
   }, []);
 
   // ── Kids handlers ────────────────────────────────────────────────────────
@@ -449,6 +453,10 @@ export default function ProfileScreen() {
           <RowDivider />
           <ProfileRow label="Contact Support" onPress={handleContactSupport} />
         </SectionCard>
+
+        {__DEV__ && (
+          <Text style={styles.devCounter}>Dumps this month: {dumpCountThisMonth}</Text>
+        )}
       </ScrollView>
 
       {/* How Mom Brain Works modal */}
@@ -602,6 +610,14 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  devCounter: {
+    fontSize: 12,
+    fontFamily: 'Nunito_400Regular',
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
   content: {
     paddingHorizontal: 20,
     gap: 16,
