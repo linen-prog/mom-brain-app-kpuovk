@@ -28,6 +28,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function openOAuthPopup(provider: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') { reject(new Error('Not supported on native')); return; }
     const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
     const width = 500;
     const height = 600;
