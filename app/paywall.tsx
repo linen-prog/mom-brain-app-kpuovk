@@ -150,9 +150,9 @@ export default function PaywallScreen() {
 
     const buttons: { text: string; onPress?: () => void; style?: "cancel" | "default" | "destructive" }[] = [
       { text: "App Store (iOS)", onPress: () => { console.log("[Paywall] Opening iOS App Store URL:", iosUrl); Linking.openURL(iosUrl); } },
-      // Android only — add real Play Store URL before enabling
+      // Android only — replace TODO_PLAY_STORE_URL with real Play Store URL before shipping Android
       ...(Platform.OS === "android"
-        ? [{ text: "Google Play", onPress: () => Linking.openURL("https://play.google.com/store/apps/details?id=your.app.id") }]
+        ? [{ text: "Google Play", onPress: () => Linking.openURL("https://play.google.com/store/apps/details?id=com.hersomatic.mombrain") }]
         : []),
       { text: "Cancel", style: "cancel" as const },
     ];
