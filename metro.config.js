@@ -113,7 +113,7 @@ config.server.enhanceMiddleware = (middleware) => {
         interceptedStatus = status;
         const headers = args[0];
         if (headers) {
-          const ct = typeof headers === 'object' ? (headers['Content-Type'] || headers['content-type']) : null;
+          const ct = headers?.['Content-Type'] ?? headers?.['content-type'] ?? null;
           if (ct) interceptedContentType = ct;
         }
         // Don't send headers yet if this is a JSON error — we'll rewrite it
