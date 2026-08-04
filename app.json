@@ -59,8 +59,7 @@
         }
       ],
       "@bacons/apple-targets",
-      "expo-apple-authentication",
-      "react-native-purchases"
+      "expo-apple-authentication"
     ],
     "scheme": "mombrain",
     "experiments": {
