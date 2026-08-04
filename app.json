@@ -59,7 +59,8 @@
         }
       ],
       "@bacons/apple-targets",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "react-native-purchases"
     ],
     "scheme": "mombrain",
     "experiments": {
@@ -68,7 +69,9 @@
     "extra": {
       "router": {},
       "backendUrl": "https://t2dt9ghkqs2kbr637r778qrbvmegnuzd.app.specular.dev",
-      "googleIosClientId": "44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr.apps.googleusercontent.com"
+      "googleIosClientId": "44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr.apps.googleusercontent.com",
+      "revenueCatApiKeyIos": "appl_hPfHAQMZqiQBCnCEIbNMxSmEtCn",
+      "revenueCatEntitlementId": "premium"
     }
   }
 }
