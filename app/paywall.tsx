@@ -145,19 +145,23 @@ export default function PaywallScreen() {
 
   // Handle app store links for web
   const handleDownloadApp = () => {
-    // TODO: Replace with your actual app store URLs
-    const iosUrl = "https://apps.apple.com/app/your-app-id";
-    const androidUrl = "https://play.google.com/store/apps/details?id=your.app.id";
+    const iosUrl = "https://apps.apple.com/app/id6785640629";
+    console.log("[Paywall] handleDownloadApp pressed");
+
+    const buttons: { text: string; onPress?: () => void; style?: "cancel" | "default" | "destructive" }[] = [
+      { text: "App Store (iOS)", onPress: () => { console.log("[Paywall] Opening iOS App Store URL:", iosUrl); Linking.openURL(iosUrl); } },
+      // Android only — add real Play Store URL before enabling
+      ...(Platform.OS === "android"
+        ? [{ text: "Google Play", onPress: () => Linking.openURL("https://play.google.com/store/apps/details?id=your.app.id") }]
+        : []),
+      { text: "Cancel", style: "cancel" as const },
+    ];
 
     // On web, we can't detect which device the user has, so show both options
     Alert.alert(
       "Download the App",
       "To subscribe, please download our app from your device's app store.",
-      [
-        { text: "App Store (iOS)", onPress: () => Linking.openURL(iosUrl) },
-        { text: "Google Play", onPress: () => Linking.openURL(androidUrl) },
-        { text: "Cancel", style: "cancel" },
-      ]
+      buttons
     );
   };
 
