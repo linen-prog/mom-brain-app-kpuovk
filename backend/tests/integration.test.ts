@@ -113,6 +113,25 @@ describe("API Integration Tests", () => {
       expect(data).toHaveProperty("taskMeta");
     });
 
+    test("Organize brain dump with parenting stages", async () => {
+      // Add longer delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      const res = await api("/api/organize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Coordinate with newborn feeding schedule, prepare school lunches",
+          stages: ["Newborn", "School-age"],
+        }),
+      });
+      await expectStatus(res, 200);
+      const data = await res.json();
+      expect(data).toHaveProperty("doToday");
+      expect(data).toHaveProperty("kids");
+      expect(data).toHaveProperty("momCheckIn");
+    });
+
     test("Organize brain dump validates taskMeta structure", async () => {
       // Add longer delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 10000));

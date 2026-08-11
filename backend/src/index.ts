@@ -28,6 +28,7 @@ app.withAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     },
   },
+  trustedOrigins: ["mombrain://"],
 });
 
 // Register routes - add your route modules here
