@@ -68,7 +68,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://zjs533cp3shvtuhmmkugmjt7ka3a3ssz.app.specular.dev",
+      "backendUrl": "https://prod-proj-auc5zpm4yhkmggajxh8se-liwg5h36mq-ey.a.run.app",
       "googleIosClientId": "44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr.apps.googleusercontent.com",
       "revenueCatApiKeyIos": "appl_hPfHAQMZqiQBCnCEIbNMxSmEtCn",
       "revenueCatEntitlementId": "premium"
