@@ -15,18 +15,19 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hersomatic.mombrain",
       "appleTeamId": "ZSU6WP9K6J",
-"infoPlist": {
-  "ITSAppUsesNonExemptEncryption": false,
-  "NSPhotoLibraryUsageDescription": "Mom Brain uses your photo library...",
-  "NSMicrophoneUsageDescription": "Mom Brain uses your microphone...",
-  "CFBundleURLTypes": [
-    {
-      "CFBundleURLSchemes": [
-        "com.googleusercontent.apps.44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr"
-      ]
-    }
-  ]
-}
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Mom Brain uses your photo library...",
+        "NSMicrophoneUsageDescription": "Mom Brain uses your microphone...",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.44493112497-3tlj69jv70jf249gj10c3g9h81f8eelr"
+            ]
+          }
+        ]
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/b70e1fd6-d418-44bc-854c-3248ed1c2ec7.jpeg",
