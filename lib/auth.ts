@@ -4,7 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-const API_URL = "https://s6w2edjvcm7dyt4r58n8fvk8z73a3yhr.app.specular.dev";
+const API_URL = "https://prod-proj-auc5zpm4yhkmggajxh8se-liwg5h36mq-ey.a.run.app";
 
 export const BEARER_TOKEN_KEY = "mombrain_bearer_token";
 
