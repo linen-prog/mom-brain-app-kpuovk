@@ -15,10 +15,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hersomatic.mombrain",
       "appleTeamId": "ZSU6WP9K6J",
-     "infoPlist": {
+"infoPlist": {
   "ITSAppUsesNonExemptEncryption": false,
-  "NSPhotoLibraryUsageDescription": "...",
-  "NSMicrophoneUsageDescription": "...",
+  "NSPhotoLibraryUsageDescription": "Mom Brain uses your photo library...",
+  "NSMicrophoneUsageDescription": "Mom Brain uses your microphone...",
   "CFBundleURLTypes": [
     {
       "CFBundleURLSchemes": [
